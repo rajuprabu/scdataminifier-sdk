@@ -57,15 +57,34 @@ cd SCDataMinifier
 `NativeImageCodec` (native methods bind by name) and obfuscates everything else. The embedded
 `.dylib`/`.so`/`.dll` are non-class resources and pass through ZKM unchanged.
 
+## What the jar contains (obfuscated, split, in-memory)
+
+The raw natives are the source of truth **on disk** under `resources/native/<os>-<arch>/`
+(kept, un-split). `build-jar.sh` does **not** put them in the jar — it runs
+`LibraryObfuscator.pack` on each to produce two opaque, scrambled parts and bundles only those:
+
+```
+(in the jar)  native/<os>-<arch>/app-resources.dat   + app-cache.bin
+```
+
+Neither part is a loadable library on its own, and the raw `.so`/`.dll`/`.dylib` never
+appears in the jar.
+
 ## Using the jar
 
 ```java
 import com.scdataminifier.image.ScImageCodec;
 
-ScImageCodec.loadBundledNative();   // picks native/<os>-<arch>/… for this machine
+ScImageCodec.loadBundledObfuscatedNative();   // OS/arch-select the two parts, merge in memory, load
 // ... now ScImageCodec.compress(...) / decode(...) use the native codec
 ```
 
-Alternatives still available: `useNativeCodec(path)` (explicit file),
-`useObfuscatedNativeCodec(blob, part)` (split/scrambled parts), `NativeImageCodec.loadDefault()`
-(`java.library.path` / Android `jniLibs`).
+`loadBundledObfuscatedNative()` reconstructs the native **in memory** and loads it from a
+RAM-backed file (`/dev/shm`, unlinked after load) on Linux/macOS; on Windows the JVM cannot
+`System.load` a DLL from a byte array, so it writes a temp DLL marked delete-on-exit (OS
+limitation). Then it verifies the pinned libwebp/libavif versions.
+
+Alternatives still available: `loadBundledNative()` (raw native from jar — only if you build
+with raw embedding), `useNativeCodec(path)` (explicit file), `useObfuscatedNativeCodec(blob,
+part)` (external split files), `NativeImageCodec.loadDefault()` (`java.library.path` / Android
+`jniLibs`).

@@ -72,6 +72,21 @@ public final class ScImageCodec {
         encoder = new NativeImageCodec();
     }
 
+    /**
+     * Production setup for a self-contained, obfuscated jar: loads the native scimage library
+     * from the two split+scrambled parts bundled in this jar for the current OS/arch, merging
+     * and loading it <em>in memory</em> (see {@link BundledNativeLoader#loadObfuscated()}). The
+     * raw {@code .so}/{@code .dll}/{@code .dylib} is never present in the jar and never written
+     * to persistent storage on Linux/macOS. This is the recommended entry for the shipped jar.
+     *
+     * @throws com.scdataminifier.ScDataException if this jar carries no parts for the running
+     *         platform, or the native fails to reconstruct / load / version-check
+     */
+    public static void loadBundledObfuscatedNative() {
+        BundledNativeLoader.loadObfuscated();
+        encoder = new NativeImageCodec();
+    }
+
     /** Decodes an ScImage to pixels using the native codec. */
     public static java.awt.image.BufferedImage decode(ScImage image) {
         return NativeImageCodec.decodeToImage(image);

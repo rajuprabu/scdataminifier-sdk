@@ -35,7 +35,45 @@ public final class BundledNativeLoader {
 
     private static final String RESOURCE_ROOT = "native";
 
+    // Split-part resource names (see LibraryObfuscator). Neither is loadable alone.
+    private static final String BLOB_NAME = "app-resources.dat";
+    private static final String PART_NAME = "app-cache.bin";
+
     private BundledNativeLoader() {}
+
+    /**
+     * OS-aware, obfuscated, in-memory load. Reads the two split+scrambled parts for the
+     * current platform from this jar ({@code native/<os>-<arch>/app-resources.dat} +
+     * {@code app-cache.bin}), reconstructs the native in memory (see {@link LibraryObfuscator}),
+     * and loads it via {@link NativeLibraryLoader} — RAM-backed ({@code /dev/shm}, unlinked
+     * after load) on Linux/macOS; a temp file marked delete-on-exit on Windows (the JVM cannot
+     * {@code System.load} a DLL from a byte array). The raw native never exists in the jar and
+     * never lands on persistent storage. Then verifies the pinned codec versions.
+     *
+     * <p>This is the counterpart to {@link #load()}, which reads a single <em>raw</em> native
+     * resource. A jar built with the obfuscated packaging carries only the parts, so use this.
+     */
+    public static synchronized void loadObfuscated() {
+        if (NativeImageCodec.isLoaded()) return;
+        Platform p = current();
+        byte[] blob = readResource(RESOURCE_ROOT + "/" + p.dir + "/" + BLOB_NAME, p);
+        byte[] part = readResource(RESOURCE_ROOT + "/" + p.dir + "/" + PART_NAME, p);
+        NativeLibraryLoader.loadFromParts(blob, part);
+    }
+
+    private static byte[] readResource(String resource, Platform p) {
+        ClassLoader cl = BundledNativeLoader.class.getClassLoader();
+        try (InputStream in = cl.getResourceAsStream(resource)) {
+            if (in == null) {
+                throw new ScDataException("No bundled native part for this platform: '" + resource
+                        + "' is not on the classpath (" + p.describe()
+                        + "). This jar was built without the " + p.dir + " binary.");
+            }
+            return in.readAllBytes();
+        } catch (IOException e) {
+            throw new ScDataException("Could not read bundled native part '" + resource + "'", e);
+        }
+    }
 
     /**
      * Resolves, extracts and loads the platform native from this jar, then verifies the
