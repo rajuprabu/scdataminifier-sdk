@@ -34,8 +34,16 @@ build_slice() { # name sysroot archs
         "$SLICE"/deps/lib/libwebp.a "$SLICE"/deps/lib/libsharpyuv.a
 }
 
+# NOTE: build each arch SINGLE-arch. A universal (arm64;x86_64) libwebp build fails because
+# its per-file NEON handling conflicts when arm64 and x86_64 are compiled in one pass. We
+# build the simulator's two arches separately and lipo them into one fat static lib.
 build_slice device    iphoneos        arm64
-build_slice simulator iphonesimulator "arm64;x86_64"
+build_slice sim-arm64 iphonesimulator arm64
+build_slice sim-x64   iphonesimulator x86_64
+
+mkdir -p "$OUT/simulator"
+lipo -create "$OUT/sim-arm64/libscimage-full.a" "$OUT/sim-x64/libscimage-full.a" \
+    -output "$OUT/simulator/libscimage-full.a"
 
 mkdir -p "$OUT/headers"
 cp "$NATIVE_DIR/src/scimage_codec.h" "$OUT/headers/"
