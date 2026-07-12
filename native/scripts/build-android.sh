@@ -27,6 +27,12 @@ for ABI in "${ABIS[@]}"; do
         "${TOOLCHAIN_ARGS[@]}"
     cmake --build "$OUT/build" -j
     cp "$OUT/build/libscimage.so" "$OUT/"
-    echo "Built: $OUT/libscimage.so"
+    # Strip debug symbols — the unstripped .so is ~50 MB (static aom/webp/avif); stripping
+    # cuts it to a few MB, which matters a lot when it is bundled/split into the app.
+    STRIP="$(echo "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/*/bin/llvm-strip)"
+    if [ -x "$STRIP" ]; then
+        "$STRIP" --strip-unneeded "$OUT/libscimage.so"
+    fi
+    echo "Built: $OUT/libscimage.so ($(du -h "$OUT/libscimage.so" | cut -f1))"
 done
 echo "Copy out/android/<abi>/libscimage.so into your app's jniLibs/<abi>/"
