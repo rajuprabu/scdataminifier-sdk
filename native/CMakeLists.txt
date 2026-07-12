@@ -49,10 +49,12 @@ endif()
 # Android: jni.h is part of the NDK sysroot; nothing to find.
 
 # Static dependency archives (order matters: avif -> aom, webp -> sharpyuv).
-find_library(AVIF_LIB avif PATHS ${DEPS_PREFIX}/lib ${DEPS_PREFIX}/lib64 NO_DEFAULT_PATH)
-find_library(AOM_LIB aom PATHS ${DEPS_PREFIX}/lib ${DEPS_PREFIX}/lib64 NO_DEFAULT_PATH)
-find_library(WEBP_LIB webp PATHS ${DEPS_PREFIX}/lib ${DEPS_PREFIX}/lib64 NO_DEFAULT_PATH)
-find_library(SHARPYUV_LIB sharpyuv PATHS ${DEPS_PREFIX}/lib ${DEPS_PREFIX}/lib64 NO_DEFAULT_PATH)
+# NO_CMAKE_FIND_ROOT_PATH: our deps live in DEPS_PREFIX, outside the Android/iOS sysroot;
+# without it the cross toolchain re-roots the PATHS into the sysroot and can't find them.
+find_library(AVIF_LIB avif PATHS ${DEPS_PREFIX}/lib ${DEPS_PREFIX}/lib64 NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+find_library(AOM_LIB aom PATHS ${DEPS_PREFIX}/lib ${DEPS_PREFIX}/lib64 NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+find_library(WEBP_LIB webp PATHS ${DEPS_PREFIX}/lib ${DEPS_PREFIX}/lib64 NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+find_library(SHARPYUV_LIB sharpyuv PATHS ${DEPS_PREFIX}/lib ${DEPS_PREFIX}/lib64 NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
 foreach(lib AVIF_LIB AOM_LIB WEBP_LIB SHARPYUV_LIB)
     if(NOT ${lib})
         message(FATAL_ERROR "${lib} not found under ${DEPS_PREFIX}/lib - run scripts/build-deps.sh")
