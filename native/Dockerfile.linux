@@ -1,0 +1,23 @@
+# Reproducible Linux x86_64 build of libscimage.so on the OLDEST glibc you deploy to.
+# Rocky 9 == RHEL 9 ABI (matches the ProjectTrustra UAT target).
+#
+#   docker build -f native/Dockerfile.linux -t scimage-linux native/..    # context = SDK dir
+#   docker run --rm -v "$PWD/resources:/out" scimage-linux \
+#       cp /work/SCDataMinifier/resources/native/linux-x86_64/libscimage.so /out/native/linux-x86_64/
+#
+# Simpler: the build writes straight into the mounted resources dir (see CMD).
+FROM rockylinux:9
+
+RUN dnf install -y gcc gcc-c++ cmake nasm make git tar gzip java-17-openjdk-devel \
+    && dnf clean all
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk
+
+WORKDIR /work
+# Expect the SCDataMinifier tree copied/mounted at /work/SCDataMinifier
+COPY SCDataMinifier /work/SCDataMinifier
+
+RUN bash /work/SCDataMinifier/native/scripts/build-linux.sh \
+    && bash /work/SCDataMinifier/native/scripts/install-to-resources.sh
+
+# The .so is now at resources/native/linux-x86_64/libscimage.so inside the image.
+CMD ["bash","-lc","ls -l /work/SCDataMinifier/resources/native/linux-x86_64/"]
