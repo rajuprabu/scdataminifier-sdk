@@ -7,8 +7,13 @@ bin/
 # Native build intermediates & outputs - CI/on-target rebuilds these
 native/out/
 
-# Upstream sources; fetched by native/scripts/fetch-sources.sh (do NOT commit)
-native/third_party/
+# Upstream sources fetched by native/scripts/fetch-sources.sh (do NOT commit) —
+# glob the CONTENTS so micro-ecc can be re-included (a parent dir can't be un-ignored).
+native/third_party/*
+# ...except micro-ecc: small, vendored, needed by CI for license verification.
+!native/third_party/micro-ecc/
+# but not its large per-arch asm blobs (unused — we force uECC_PLATFORM=0 generic C)
+native/third_party/micro-ecc/asm_*.inc
 
 # Bundled binaries are produced by CI per-OS; don't commit them
 resources/native/*/libscimage.dylib

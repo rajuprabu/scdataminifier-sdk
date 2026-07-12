@@ -94,6 +94,31 @@ public final class NativeImageCodec implements ImageEncoder {
     private static native byte[] nDecodeWebp(byte[] data, int[] dims);
     private static native byte[] nDecodeAvif(byte[] data, int[] dims);
 
+    static native int nLicenseInit(byte[] license, String packageName);
+    static native boolean nLicenseOk();
+
+    // ==================== licensing ====================
+
+    /**
+     * Applies a signed license to the native library. Must succeed before any encode/decode —
+     * the .so refuses value operations until a valid license bound to {@code packageName} is
+     * accepted. The library verifies the signature with its embedded public key and enforces
+     * the licensed package name and validity dates.
+     *
+     * @param license     raw license bytes (the base64-decoded body of a .lic file)
+     * @param packageName the calling app's Android applicationId / iOS bundle identifier
+     * @return 0 on success (SC_LIC_OK); negative on failure (-2 signature, -3 package, -4 not
+     *         yet valid, -5 expired, -1 malformed)
+     */
+    public static int applyLicense(byte[] license, String packageName) {
+        return nLicenseInit(license, packageName);
+    }
+
+    /** True once a valid license has been accepted by {@link #applyLicense}. */
+    public static boolean isLicensed() {
+        return nLicenseOk();
+    }
+
     // ==================== byte-level API (desktop + Android) ====================
 
     /** Encodes 24-bit RGB pixels (3 bytes/pixel, row-major) to a complete image file. */

@@ -7,6 +7,29 @@
 #include <string.h>
 
 #include "scimage_codec.h"
+#include "license.h"
+
+/* License gate: the app calls this once with the .lic bytes + its own package name before
+ * any encode/decode. Returns 0 (SC_LIC_OK) on success, negative on failure. */
+JNIEXPORT jint JNICALL
+Java_com_scdataminifier_image_NativeImageCodec_nLicenseInit(JNIEnv* env, jclass cls,
+                                                            jbyteArray lic, jstring pkg) {
+    (void) cls;
+    if (!lic || !pkg) return SC_LIC_ERR_MALFORMED;
+    jsize len = (*env)->GetArrayLength(env, lic);
+    jbyte* buf = (*env)->GetByteArrayElements(env, lic, NULL);
+    const char* pkgStr = (*env)->GetStringUTFChars(env, pkg, NULL);
+    int r = sc_license_init((const unsigned char*) buf, (size_t) len, pkgStr);
+    (*env)->ReleaseStringUTFChars(env, pkg, pkgStr);
+    (*env)->ReleaseByteArrayElements(env, lic, buf, JNI_ABORT);
+    return r;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_scdataminifier_image_NativeImageCodec_nLicenseOk(JNIEnv* env, jclass cls) {
+    (void) env; (void) cls;
+    return sc_license_ok() ? JNI_TRUE : JNI_FALSE;
+}
 
 static void throw_ex(JNIEnv* env, const char* msg) {
     jclass cls = (*env)->FindClass(env, "com/scdataminifier/ScDataException");

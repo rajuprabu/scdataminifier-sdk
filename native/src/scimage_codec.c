@@ -1,4 +1,5 @@
 #include "scimage_codec.h"
+#include "license.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +25,13 @@ static void set_error(const char* msg) {
 
 const char* scimg_last_error(void) { return g_error; }
 
+/* License gate: value methods refuse to run until sc_license_init() accepts a valid license. */
+static uint8_t* license_denied(void) {
+    set_error("SCData: no valid license - call sc_license_init(license, package) first");
+    return NULL;
+}
+#define SCIMG_REQUIRE_LICENSE() do { if (!sc_license_ok()) return license_denied(); } while (0)
+
 const char* scimg_webp_version(void) {
     int v = WebPGetEncoderVersion();
     snprintf(g_webp_version, sizeof(g_webp_version), "%d.%d.%d",
@@ -44,6 +52,7 @@ void scimg_free(uint8_t* p) { free(p); }
 
 uint8_t* scimg_encode_webp(const uint8_t* rgb, int width, int height,
                            int quality, size_t* out_size) {
+    SCIMG_REQUIRE_LICENSE();
     WebPConfig config;
     WebPPicture pic;
     WebPMemoryWriter writer;
@@ -98,6 +107,7 @@ uint8_t* scimg_encode_webp(const uint8_t* rgb, int width, int height,
 
 uint8_t* scimg_decode_webp(const uint8_t* data, size_t size,
                            int* out_width, int* out_height) {
+    SCIMG_REQUIRE_LICENSE();
     uint8_t* rgb;
     uint8_t* out;
     if (!data || size == 0 || !out_width || !out_height) {
@@ -125,6 +135,7 @@ uint8_t* scimg_decode_webp(const uint8_t* data, size_t size,
 
 uint8_t* scimg_encode_avif(const uint8_t* rgb, int width, int height,
                            int quality, int speed, size_t* out_size) {
+    SCIMG_REQUIRE_LICENSE();
     avifImage* image = NULL;
     avifEncoder* encoder = NULL;
     avifRWData output = AVIF_DATA_EMPTY;
@@ -192,6 +203,7 @@ cleanup:
 
 uint8_t* scimg_decode_avif(const uint8_t* data, size_t size,
                            int* out_width, int* out_height) {
+    SCIMG_REQUIRE_LICENSE();
     avifDecoder* decoder = NULL;
     avifRGBImage rgbImage;
     avifResult result;

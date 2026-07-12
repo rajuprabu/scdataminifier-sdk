@@ -87,6 +87,22 @@ public final class ScImageCodec {
         encoder = new NativeImageCodec();
     }
 
+    /**
+     * Applies a signed license to the loaded native library. The native refuses all
+     * encode/decode until this succeeds — see {@link NativeImageCodec#applyLicense}.
+     * Call once after loading the native and before any codec use.
+     *
+     * @return 0 on success; negative license error code otherwise
+     */
+    public static int applyLicense(byte[] license, String packageName) {
+        return NativeImageCodec.applyLicense(license, packageName);
+    }
+
+    /** True once a valid license has been accepted. */
+    public static boolean isLicensed() {
+        return NativeImageCodec.isLicensed();
+    }
+
     /** Decodes an ScImage to pixels using the native codec. */
     public static java.awt.image.BufferedImage decode(ScImage image) {
         return NativeImageCodec.decodeToImage(image);

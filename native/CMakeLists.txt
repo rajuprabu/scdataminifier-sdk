@@ -19,10 +19,17 @@ if(NOT DEPS_PREFIX)
     message(FATAL_ERROR "Pass -DDEPS_PREFIX=<dir> (run scripts/build-deps.sh first)")
 endif()
 
-set(SCIMG_SOURCES src/scimage_codec.c)
+set(SCIMG_SOURCES src/scimage_codec.c
+                  src/license.c
+                  src/sha256.c
+                  third_party/micro-ecc/uECC.c)
 if(SCIMG_JNI)
     list(APPEND SCIMG_SOURCES src/scimage_jni.c)
 endif()
+
+# Force micro-ecc's portable C path (no per-arch asm) for reproducible builds across all
+# Android ABIs + iOS. License verification runs once at init, so speed is irrelevant.
+add_compile_definitions(uECC_PLATFORM=0)
 
 if(SCIMG_STATIC)
     add_library(scimage STATIC ${SCIMG_SOURCES})
