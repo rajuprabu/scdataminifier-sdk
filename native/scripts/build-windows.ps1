@@ -7,21 +7,21 @@
 #   - Run from "x64 Native Tools" prompt (or CI with the VS environment active).
 $ErrorActionPreference = "Stop"
 
-# Native (exe) commands don't trip $ErrorActionPreference; check exit codes explicitly.
-function Invoke-Checked {
-    param([Parameter(ValueFromRemainingArguments=$true)][string[]]$Cmd)
-    Write-Host ">> $($Cmd -join ' ')"
-    & $Cmd[0] $Cmd[1..($Cmd.Length-1)]
-    if ($LASTEXITCODE -ne 0) { throw "Command failed ($LASTEXITCODE): $($Cmd -join ' ')" }
+# Native (exe) commands don't trip $ErrorActionPreference in Windows PowerShell; commands are
+# run directly (so their -flags bind correctly) and their exit code checked right after.
+function Check($label) {
+    if ($LASTEXITCODE -ne 0) { throw "$label failed (exit code $LASTEXITCODE)" }
 }
 
-# aom's x86-64 assembly needs nasm on PATH *in this process*. Fail early with a clear message.
-$nasm = Get-Command nasm -ErrorAction SilentlyContinue
-if (-not $nasm) {
+# aom's x86-64 assembly needs nasm on PATH in this process.
+if (-not (Get-Command nasm -ErrorAction SilentlyContinue)) {
     $guess = "C:\Program Files\NASM"
     if (Test-Path (Join-Path $guess "nasm.exe")) { $env:PATH = "$guess;$env:PATH" }
 }
-Invoke-Checked nasm -v
+if (-not (Get-Command nasm -ErrorAction SilentlyContinue)) {
+    throw "nasm not found on PATH - install it (choco install nasm) and ensure 'C:\Program Files\NASM' is on PATH"
+}
+Write-Host "Using nasm: $((Get-Command nasm).Source)"
 
 $NativeDir = Split-Path -Parent $PSScriptRoot
 $Out = Join-Path $NativeDir "out\windows-x64"
@@ -54,34 +54,39 @@ $Common = @("-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=$Prefix",
             "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded")
 
 Write-Host "=== libwebp $LIBWEBP_VERSION ==="
-Invoke-Checked cmake -S "$NativeDir\third_party\libwebp-$LIBWEBP_VERSION" -B "$Out\deps-build\webp" @Common `
+cmake -S "$NativeDir\third_party\libwebp-$LIBWEBP_VERSION" -B "$Out\deps-build\webp" @Common `
     -DWEBP_BUILD_ANIM_UTILS=OFF -DWEBP_BUILD_CWEBP=OFF -DWEBP_BUILD_DWEBP=OFF `
     -DWEBP_BUILD_GIF2WEBP=OFF -DWEBP_BUILD_IMG2WEBP=OFF -DWEBP_BUILD_VWEBP=OFF `
     -DWEBP_BUILD_WEBPINFO=OFF -DWEBP_BUILD_WEBPMUX=OFF -DWEBP_BUILD_EXTRAS=OFF
-Invoke-Checked cmake --build "$Out\deps-build\webp" --config Release
-Invoke-Checked cmake --install "$Out\deps-build\webp" --config Release
+Check "cmake configure libwebp"
+cmake --build "$Out\deps-build\webp" --config Release; Check "cmake build libwebp"
+cmake --install "$Out\deps-build\webp" --config Release; Check "cmake install libwebp"
 
 Write-Host "=== aom $AOM_VERSION ==="
-Invoke-Checked cmake -S "$NativeDir\third_party\libaom-$AOM_VERSION" -B "$Out\deps-build\aom" @Common `
+cmake -S "$NativeDir\third_party\libaom-$AOM_VERSION" -B "$Out\deps-build\aom" @Common `
     -DENABLE_TESTS=0 -DENABLE_EXAMPLES=0 -DENABLE_DOCS=0 -DENABLE_TOOLS=0 `
     -DCONFIG_AV1_ENCODER=1 -DCONFIG_AV1_DECODER=1
-Invoke-Checked cmake --build "$Out\deps-build\aom" --config Release
-Invoke-Checked cmake --install "$Out\deps-build\aom" --config Release
+Check "cmake configure aom"
+cmake --build "$Out\deps-build\aom" --config Release; Check "cmake build aom"
+cmake --install "$Out\deps-build\aom" --config Release; Check "cmake install aom"
 
 Write-Host "=== libavif $LIBAVIF_VERSION ==="
-Invoke-Checked cmake -S "$NativeDir\third_party\libavif-$LIBAVIF_VERSION" -B "$Out\deps-build\avif" @Common `
+cmake -S "$NativeDir\third_party\libavif-$LIBAVIF_VERSION" -B "$Out\deps-build\avif" @Common `
     -DAVIF_CODEC_AOM=SYSTEM -DAVIF_LIBYUV=OFF -DAVIF_BUILD_APPS=OFF `
     -DAVIF_BUILD_EXAMPLES=OFF -DAVIF_BUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="$Prefix"
-Invoke-Checked cmake --build "$Out\deps-build\avif" --config Release
-Invoke-Checked cmake --install "$Out\deps-build\avif" --config Release
+Check "cmake configure libavif"
+cmake --build "$Out\deps-build\avif" --config Release; Check "cmake build libavif"
+cmake --install "$Out\deps-build\avif" --config Release; Check "cmake install libavif"
 
-Write-Host "=== installed dependency libs ==="
+Write-Host "=== installed dependency libs in $Prefix\lib ==="
 Get-ChildItem "$Prefix\lib" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "   $($_.Name)" }
 
 Write-Host "=== scimage.dll ==="
-Invoke-Checked cmake -S $NativeDir -B "$Out\build" -DCMAKE_BUILD_TYPE=Release -DDEPS_PREFIX="$Prefix" -DSCIMG_JNI=ON `
+cmake -S $NativeDir -B "$Out\build" -DCMAKE_BUILD_TYPE=Release -DDEPS_PREFIX="$Prefix" -DSCIMG_JNI=ON `
     -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
-Invoke-Checked cmake --build "$Out\build" --config Release
+Check "cmake configure scimage"
+cmake --build "$Out\build" --config Release; Check "cmake build scimage"
+
 Copy-Item "$Out\build\Release\scimage.dll" $Out
 Write-Host "Built: $Out\scimage.dll"
 
