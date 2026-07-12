@@ -20,6 +20,15 @@ mkdir -p "$BUILD_DIR" "$PREFIX"
 
 COMMON=(-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX"
         -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+        # Cross toolchains (Android NDK / iOS) set FIND_ROOT_PATH_MODE_*=ONLY, restricting
+        # find_library/find_package to the sysroot. Our deps install to $PREFIX (outside it),
+        # so libavif's find_package(aom) fails there. Setting the modes to BOTH lets find_*
+        # ALSO search the host paths (CMAKE_PREFIX_PATH=$PREFIX) without touching the
+        # toolchain's own sysroot root path. Harmless (already BOTH) on desktop.
+        -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=BOTH
+        -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=BOTH
+        -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH
+        -DCMAKE_PREFIX_PATH="$PREFIX"
         ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"})
 
 echo "=== libwebp $LIBWEBP_VERSION ==="
