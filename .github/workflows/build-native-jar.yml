@@ -30,8 +30,8 @@ jobs:
             build: sudo apt-get update && sudo apt-get install -y nasm cmake && bash native/scripts/build-linux.sh && bash native/scripts/install-to-resources.sh
             resdir: linux-x86_64
             lib: libscimage.so
-          - os: windows-2022    # x86_64 (MSVC + nasm, provided by the runner)
-            build: choco install nasm -y; powershell -ExecutionPolicy Bypass -File native/scripts/build-windows.ps1
+          - os: windows-2022    # x86_64 (MSVC from the runner + nasm installed below)
+            build: powershell -ExecutionPolicy Bypass -File native/scripts/build-windows.ps1
             resdir: windows-x86_64
             lib: scimage.dll
     runs-on: ${{ matrix.os }}
@@ -39,6 +39,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
+      # Windows: install nasm in its OWN step and put it on PATH for the build step
+      # (choco updates PATH in the registry, not the current process — a same-step install
+      # would be invisible to aom's build and cause a cascading "AVIF_LIB not found").
+      - name: Install NASM (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install nasm -y
+          "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Setup MSVC dev environment (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
       - name: Build native
         shell: bash
         run: ${{ matrix.build }}
