@@ -22,7 +22,7 @@ import com.scdataminifier.util.ImageContainers;
  *
  * Stripping verifies that the rebuild is byte-identical to the original
  * encoder output and throws otherwise, so writer and viewer must run the
- * same pinned encoder/decoder versions (see CliImageEncoder pinning).
+ * same pinned encoder/decoder versions (see NativeImageCodec pinning).
  */
 public class ScImage {
 

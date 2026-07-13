@@ -30,22 +30,20 @@ import com.scdataminifier.model.ScImage;
  */
 public final class ScImageCodec {
 
-    private static volatile ImageEncoder encoder = new CliImageEncoder();
+    // Native-only: image compression runs through the bundled native codec (statically-linked,
+    // pinned libwebp/libavif/aom). There is no CLI/external-tool backend. The encoder is set by
+    // loadBundledObfuscatedNative()/useNativeCodec(); compress() fails until then.
+    private static volatile ImageEncoder encoder;
 
     private ScImageCodec() {}
 
-    /** Replaces the encoding backend (e.g. an Android Bitmap.compress implementation). */
+    /**
+     * Replaces the encoding backend — the only supported override is an on-device native
+     * implementation (e.g. Android's own NDK build); there is no CLI/external-tool encoder.
+     */
     public static void setEncoder(ImageEncoder customEncoder) {
         if (customEncoder == null) throw new ScDataException("Encoder is null");
         encoder = customEncoder;
-    }
-
-    /**
-     * Pins the CLI encoder tools to exact versions; every encode verifies the
-     * installed cwebp/avifenc match and fails loudly on drift.
-     */
-    public static void pinEncoderVersions(String cwebpVersion, String avifencVersion) {
-        encoder = new CliImageEncoder(cwebpVersion, avifencVersion);
     }
 
     /**
@@ -168,7 +166,13 @@ public final class ScImageCodec {
     }
 
     private static ScImage encodeAt(BufferedImage image, ImageType type, boolean includeHeader, int quality) {
-        byte[] file = encoder.encode(image, type, quality);
+        ImageEncoder enc = encoder;
+        if (enc == null) {
+            throw new ScDataException("Native codec not loaded — call "
+                    + "ScImageCodec.loadBundledObfuscatedNative() (and applyLicense) or "
+                    + "useNativeCodec(path) before compressing");
+        }
+        byte[] file = enc.encode(image, type, quality);
         return ScImage.fromImageBytes(type, includeHeader, file);
     }
 
