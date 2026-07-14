@@ -170,6 +170,29 @@ public final class SCQrGenerator {
         return out;
     }
 
+    /** Maximum payload bytes encodable at the given format, version and ECC. */
+    public static int maxPayloadBytes(DataFormat format, int version, Ecc ecc) {
+        if (version < 1 || version > 40) throw new ScDataException("QR version must be 1-40, got " + version);
+        int capacityBits = QrCode.getNumDataCodewords(version, ecc) * 8;
+        int lo = 0, hi = capacityBits / 8 + 1;
+        while (lo < hi) {
+            int mid = (lo + hi + 1) >>> 1;
+            if (fits(mid, format, version, ecc, capacityBits)) lo = mid; else hi = mid - 1;
+        }
+        return lo;
+    }
+
+    private static boolean fits(int numBytes, DataFormat format, int version, Ecc ecc, int capacityBits) {
+        byte[] probe = new byte[numBytes];
+        if (format == DataFormat.NUMERIC) java.util.Arrays.fill(probe, (byte) 0xFF); // worst-case digit count
+        QrSegment seg = (format == DataFormat.NUMERIC)
+                ? QrSegment.makeNumeric(bytesToNumeric(probe))
+                : QrSegment.makeBytes(probe);
+        int ccbits = seg.mode.numCharCountBits(version);
+        if (seg.numChars >= (1 << ccbits)) return false;
+        return 4 + ccbits + seg.bitLength <= capacityBits;
+    }
+
     /** Smallest version (1-40) that fits the data for the given format and ECC, or -1 if none. */
     public static int minimumVersion(byte[] data, DataFormat format, Ecc ecc) {
         QrSegment segment = (format == DataFormat.NUMERIC)
