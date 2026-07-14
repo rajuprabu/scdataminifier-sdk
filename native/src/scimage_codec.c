@@ -149,7 +149,14 @@ uint8_t* scimg_encode_avif(const uint8_t* rgb, int width, int height,
     }
 
     /* AV1 Main profile: 8-bit 4:2:0; sRGB nclx matching the pinned
-       avifenc command line (CICP 1/13/6, full range). */
+       avifenc command line (CICP 1/13/6, full range).
+       NOTE: tried 4:4:4 (no chroma subsampling) here to close a quality gap against a manual
+       avifenc reference — reverted. It changes the AVIF container's internal box layout enough
+       that ImageContainers.stripAvifV1 (the header=false minimal-container path every caller in
+       this codebase uses to keep the QR payload small) throws "reconstruction mismatch
+       (non-canonical container)". Fixing that needs stripAvifV1 generalized to non-4:2:0
+       layouts, which is a wire-format change every decoder (worker app, verifier app, both
+       platforms) would need to keep matching — out of scope for this pass. */
     image = avifImageCreate((uint32_t) width, (uint32_t) height, 8, AVIF_PIXEL_FORMAT_YUV420);
     if (!image) {
         set_error("avifImageCreate failed");
@@ -179,6 +186,14 @@ uint8_t* scimg_encode_avif(const uint8_t* rgb, int width, int height,
     encoder->quality = quality;
     encoder->speed = speed;
     encoder->maxThreads = 1; /* deterministic output */
+    /* Perceptual (SSIM) rate-distortion tuning instead of aom's default (PSNR-oriented) —
+     * matches the reference `avifenc -a tune=ssim` command this codec is pinned against.
+     * This only reweights internal mode/quantizer decisions for smoother-looking output; it
+     * does not change the quality->size relationship the byte-budget binary search in
+     * ScImageCodec.compress() relies on, so it's safe to enable unconditionally. Best-effort:
+     * an unrecognized codec-specific option must never fail an otherwise-valid encode.
+     */
+    (void) avifEncoderSetCodecSpecificOption(encoder, "tune", "ssim");
 
     result = avifEncoderWrite(encoder, image, &output);
     if (result != AVIF_RESULT_OK) {
