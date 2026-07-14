@@ -1,0 +1,38 @@
+// Zelix KlassMaster obfuscation for the SCDataMinifier (Secure Code) SDK jar.
+// Run from SCDataMinifier/ :  java -jar /Users/praburaju/P_DRIVE/ZKM/ZKM.jar build/zkm/scdataminifier.zkm
+// (obfuscate.sh wraps this.)  Input: dist/scdataminifier.jar  Output: dist/obf/scdataminifier.jar
+//
+// The embedded native binaries (native/<os>-<arch>/...) are non-class resources and pass
+// through unchanged. Only .class files are transformed. The jar is zero-dependency, so the
+// only classes present are com.scdataminifier.*
+
+open "dist/scdataminifier.jar";
+
+// ---- Name-exclusions (keep these names so JNI binding and callers still work) ----
+// ^name^ markers = the parts kept from renaming.
+exclude
+    // Keep every SDK class NAME + all PUBLIC members: this is a library whose public API
+    // (ScImageCodec, ScDataWriter/Parser, SCQrGenerator, model, enums) is compiled against.
+    // In ZKM a single '*' in the package position spans all package depth; the jar is
+    // zero-dependency so *.^*^ matches exactly the com.scdataminifier.* classes.
+    *.^*^ public *(*) and
+    *.^*^ public * and
+
+    // JNI binds native methods by mangled symbol name. NativeImageCodec has PRIVATE native
+    // methods (nEncodeWebp/nEncodeAvif/nDecodeWebp/nDecodeAvif) — keep the class name and
+    // ALL its members (public rule above misses the private natives).
+    com.scdataminifier.image.^NativeImageCodec^ *(*) and
+    com.scdataminifier.image.^NativeImageCodec^ * ;
+
+// ---- Transformation: internal logic still gets flow + string + exception obfuscation ----
+obfuscate changeLogFileOut = "build/zkm/changeLog.txt"
+          obfuscateFlow = aggressive
+          encryptStringLiterals = normal
+          exceptionObfuscation = heavy
+          lineNumbers = delete
+          // Callers compile against nested types (SCQrGenerator.DataFormat, .QrResult,
+          // MultiQr.Fragment, MultiQrAssembler.Status) — javac needs the InnerClasses
+          // attribute, which ZKM strips by default.
+          keepInnerClassInfo = true;
+
+saveAll "dist/obf";
