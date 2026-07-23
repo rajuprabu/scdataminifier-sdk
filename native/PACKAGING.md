@@ -32,7 +32,7 @@ correctly from a single macOS host.
 |-------------------|-----|--------|
 | macOS (this host) | `native/scripts/build-macos.sh` then `native/scripts/install-to-resources.sh` | `resources/native/macos-<arch>/libscimage.dylib` |
 | Linux x86_64      | On RHEL9/Rocky9: `build-linux.sh` + `install-to-resources.sh` — **or** `docker build -f native/Dockerfile.linux -t scimage-linux .` (context = SCDataMinifier dir) then copy the `.so` out | `resources/native/linux-x86_64/libscimage.so` |
-| Linux aarch64     | Same on an arm64 Linux host/runner | `resources/native/linux-aarch64/libscimage.so` |
+| Linux aarch64     | CI `ubuntu-22.04-arm` runner (build-native-jar), or on an arm64 Linux host with `build-linux.sh` | `resources/native/linux-aarch64/libscimage.so` |
 | Windows x86_64    | From an "x64 Native Tools" prompt: `native/scripts/build-windows.ps1`, then copy `native/out/windows-x64/scimage.dll` → `resources/native/windows-x86_64/` | `resources/native/windows-x86_64/scimage.dll` |
 
 Prereqs per platform are documented at the top of each script (RHEL: `gcc gcc-c++ cmake nasm

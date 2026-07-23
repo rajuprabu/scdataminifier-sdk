@@ -1,7 +1,8 @@
 name: build-native-jar
 
-# Builds the scimage native on each OS on its own GitHub-hosted runner, collects them into
-# the jar-resource layout, and builds the SDK jar. No local toolchain needed.
+# Builds the scimage native on each OS/arch on its own GitHub-hosted runner (macOS arm64,
+# Linux x86_64, Linux aarch64, Windows x86_64), collects them into the jar-resource layout,
+# and builds the SDK jar. No local toolchain needed.
 #
 # Run it: GitHub -> Actions tab -> "build-native-jar" -> Run workflow.
 # Artifacts to download when it finishes: native-<os>-<arch> (each binary) and
@@ -29,6 +30,13 @@ jobs:
           - os: ubuntu-22.04    # x86_64
             build: sudo apt-get update && sudo apt-get install -y nasm cmake && bash native/scripts/build-linux.sh && bash native/scripts/install-to-resources.sh
             resdir: linux-x86_64
+            lib: libscimage.so
+          - os: ubuntu-22.04-arm  # aarch64 (GitHub-hosted ARM64 Linux runner)
+            # aom on aarch64 uses NEON intrinsics, not x86 asm — nasm is installed but unused.
+            # glibc note: this runner is glibc 2.35; if your ARM target is older (e.g. Rocky 9
+            # aarch64 = 2.34) build on that box with build-linux.sh instead (same as x86_64).
+            build: sudo apt-get update && sudo apt-get install -y nasm cmake && bash native/scripts/build-linux.sh && bash native/scripts/install-to-resources.sh
+            resdir: linux-aarch64
             lib: libscimage.so
           - os: windows-2022    # x86_64 (MSVC from the runner + nasm installed below)
             build: powershell -ExecutionPolicy Bypass -File native/scripts/build-windows.ps1
