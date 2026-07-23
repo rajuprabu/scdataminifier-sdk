@@ -27,15 +27,16 @@ jobs:
             build: bash native/scripts/build-macos.sh && bash native/scripts/install-to-resources.sh
             resdir: macos-aarch64
             lib: libscimage.dylib
-          - os: ubuntu-22.04    # x86_64
-            build: sudo apt-get update && sudo apt-get install -y nasm cmake && bash native/scripts/build-linux.sh && bash native/scripts/install-to-resources.sh
+          # Both Linux arches build INSIDE a rockylinux:9 container so the .so targets glibc
+          # 2.34 (Rocky/RHEL 9 ABI) and loads on Rocky 9+ AND newer distros. The host runner
+          # only provides docker + the right CPU (ubuntu-22.04 = x86_64, ubuntu-22.04-arm =
+          # aarch64); rockylinux:9 is multi-arch so it pulls the matching variant.
+          - os: ubuntu-22.04    # x86_64 host -> Rocky 9 x86_64 container
+            build: docker run --rm -v "$PWD":/work/SCDataMinifier -w /work/SCDataMinifier -e JAVA_HOME=/usr/lib/jvm/java-17-openjdk rockylinux:9 bash -c "dnf install -y gcc gcc-c++ cmake nasm make git tar gzip which diffutils perl-Digest-SHA java-17-openjdk-devel && bash native/scripts/build-linux.sh && bash native/scripts/install-to-resources.sh"
             resdir: linux-x86_64
             lib: libscimage.so
-          - os: ubuntu-22.04-arm  # aarch64 (GitHub-hosted ARM64 Linux runner)
-            # aom on aarch64 uses NEON intrinsics, not x86 asm — nasm is installed but unused.
-            # glibc note: this runner is glibc 2.35; if your ARM target is older (e.g. Rocky 9
-            # aarch64 = 2.34) build on that box with build-linux.sh instead (same as x86_64).
-            build: sudo apt-get update && sudo apt-get install -y nasm cmake && bash native/scripts/build-linux.sh && bash native/scripts/install-to-resources.sh
+          - os: ubuntu-22.04-arm  # aarch64 host -> Rocky 9 aarch64 container (nasm unused; aom uses NEON)
+            build: docker run --rm -v "$PWD":/work/SCDataMinifier -w /work/SCDataMinifier -e JAVA_HOME=/usr/lib/jvm/java-17-openjdk rockylinux:9 bash -c "dnf install -y gcc gcc-c++ cmake nasm make git tar gzip which diffutils perl-Digest-SHA java-17-openjdk-devel && bash native/scripts/build-linux.sh && bash native/scripts/install-to-resources.sh"
             resdir: linux-aarch64
             lib: libscimage.so
           - os: windows-2022    # x86_64 (MSVC from the runner + nasm installed below)

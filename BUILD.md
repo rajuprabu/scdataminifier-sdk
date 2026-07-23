@@ -127,6 +127,12 @@ Produces the license-gated **encode + decode** codec (statically-linked, pinned
 libwebp 1.6.0 + libavif 1.4.2 + aom 3.14.1). Build on the **oldest** distro you deploy to (the
 `.so` links the build host's glibc).
 
+> **Linux glibc / Rocky targets:** the `.so` requires the build host's glibc or newer. CI builds
+> **both** `linux-x86_64` and `linux-aarch64` inside a `rockylinux:9` container (glibc 2.34), so
+> they load on Rocky/RHEL 9+ and any newer distro. To build locally for a Rocky target on a
+> non-Rocky host, use `native/Dockerfile.linux` (multi-arch: x86_64 host → linux-x86_64,
+> aarch64 host / `--platform linux/arm64` → linux-aarch64) rather than `build-linux.sh` directly.
+
 ```bash
 # Linux (RHEL/Rocky 9+):
 native/scripts/build-linux.sh          # -> native/out/linux-<arch>/libscimage.so

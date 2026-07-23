@@ -1,15 +1,19 @@
-# Reproducible Linux x86_64 build of libscimage.so on the OLDEST glibc you deploy to.
-# Rocky 9 == RHEL 9 ABI (matches the ProjectTrustra UAT target).
+# Reproducible Linux build of libscimage.so on the OLDEST glibc you deploy to.
+# Rocky 9 == RHEL 9 ABI (matches the ProjectTrustra UAT target, glibc 2.34).
+#
+# rockylinux:9 is MULTI-ARCH: run this on an x86_64 host for a linux-x86_64 .so, or on an
+# aarch64 host (e.g. Apple Silicon, or `docker build --platform linux/arm64`) for a
+# linux-aarch64 .so. build-linux.sh keys the output dir off `uname -m`.
 #
 #   docker build -f native/Dockerfile.linux -t scimage-linux native/..    # context = SDK dir
 #   docker run --rm -v "$PWD/resources:/out" scimage-linux \
-#       cp /work/SCDataMinifier/resources/native/linux-x86_64/libscimage.so /out/native/linux-x86_64/
+#       cp /work/SCDataMinifier/resources/native/linux-$(uname -m)/libscimage.so /out/native/linux-$(uname -m)/
 #
 # Simpler: the build writes straight into the mounted resources dir (see CMD).
 FROM rockylinux:9
 
-RUN dnf install -y gcc gcc-c++ cmake nasm make git tar gzip java-17-openjdk-devel \
-    && dnf clean all
+RUN dnf install -y gcc gcc-c++ cmake nasm make git tar gzip which diffutils perl-Digest-SHA \
+    java-17-openjdk-devel && dnf clean all
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk
 
 WORKDIR /work
