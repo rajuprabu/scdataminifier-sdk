@@ -12,8 +12,12 @@
 # Simpler: the build writes straight into the mounted resources dir (see CMD).
 FROM rockylinux:9
 
-RUN dnf install -y gcc gcc-c++ cmake nasm make git tar gzip which diffutils perl-Digest-SHA \
-    java-17-openjdk-devel && dnf clean all
+# nasm is in Rocky's CRB repo (disabled by default) and is needed only on x86_64 (aom uses
+# NEON via gcc on aarch64) — install it best-effort so this Dockerfile works on both arches.
+RUN dnf install -y --enablerepo=crb gcc gcc-c++ cmake make git tar gzip which diffutils \
+        perl-Digest-SHA java-17-openjdk-devel \
+    && ( dnf install -y --enablerepo=crb nasm || true ) \
+    && dnf clean all
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk
 
 WORKDIR /work

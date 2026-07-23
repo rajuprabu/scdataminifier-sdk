@@ -31,12 +31,15 @@ jobs:
           # 2.34 (Rocky/RHEL 9 ABI) and loads on Rocky 9+ AND newer distros. The host runner
           # only provides docker + the right CPU (ubuntu-22.04 = x86_64, ubuntu-22.04-arm =
           # aarch64); rockylinux:9 is multi-arch so it pulls the matching variant.
+          # nasm lives in Rocky's CRB repo (defined but disabled by default) — enable it with
+          # --enablerepo=crb. aom needs nasm ONLY on x86_64; on aarch64 it uses NEON via gcc, so
+          # nasm is omitted there (it isn't needed and keeps the dep list minimal).
           - os: ubuntu-22.04    # x86_64 host -> Rocky 9 x86_64 container
-            build: docker run --rm -v "$PWD":/work/SCDataMinifier -w /work/SCDataMinifier -e JAVA_HOME=/usr/lib/jvm/java-17-openjdk rockylinux:9 bash -c "dnf install -y gcc gcc-c++ cmake nasm make git tar gzip which diffutils perl-Digest-SHA java-17-openjdk-devel && bash native/scripts/build-linux.sh && bash native/scripts/install-to-resources.sh"
+            build: docker run --rm -v "$PWD":/work/SCDataMinifier -w /work/SCDataMinifier -e JAVA_HOME=/usr/lib/jvm/java-17-openjdk rockylinux:9 bash -c "dnf install -y --enablerepo=crb gcc gcc-c++ cmake make git tar gzip which diffutils perl-Digest-SHA nasm java-17-openjdk-devel && bash native/scripts/build-linux.sh && bash native/scripts/install-to-resources.sh"
             resdir: linux-x86_64
             lib: libscimage.so
-          - os: ubuntu-22.04-arm  # aarch64 host -> Rocky 9 aarch64 container (nasm unused; aom uses NEON)
-            build: docker run --rm -v "$PWD":/work/SCDataMinifier -w /work/SCDataMinifier -e JAVA_HOME=/usr/lib/jvm/java-17-openjdk rockylinux:9 bash -c "dnf install -y gcc gcc-c++ cmake nasm make git tar gzip which diffutils perl-Digest-SHA java-17-openjdk-devel && bash native/scripts/build-linux.sh && bash native/scripts/install-to-resources.sh"
+          - os: ubuntu-22.04-arm  # aarch64 host -> Rocky 9 aarch64 container (no nasm; aom uses NEON)
+            build: docker run --rm -v "$PWD":/work/SCDataMinifier -w /work/SCDataMinifier -e JAVA_HOME=/usr/lib/jvm/java-17-openjdk rockylinux:9 bash -c "dnf install -y --enablerepo=crb gcc gcc-c++ cmake make git tar gzip which diffutils perl-Digest-SHA java-17-openjdk-devel && bash native/scripts/build-linux.sh && bash native/scripts/install-to-resources.sh"
             resdir: linux-aarch64
             lib: libscimage.so
           - os: windows-2022    # x86_64 (MSVC from the runner + nasm installed below)
