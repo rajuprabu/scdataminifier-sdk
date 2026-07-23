@@ -30,3 +30,7 @@ ZKM_LoadLog.txt
 build/zkm/changeLog.txt
 
 .DS_Store
+
+# Decode-only mobile SDK build outputs — CI/on-target rebuilds these
+mobile-native/out/
+dist-backup-*/
