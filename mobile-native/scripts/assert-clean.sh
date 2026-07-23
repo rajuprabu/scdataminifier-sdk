@@ -6,9 +6,13 @@
 set -euo pipefail
 LIB="$1"
 
-# 1) exported symbols — allow only our own
+# 1) exported symbols — allow only our own.
+# GNU nm (ELF): `nm -D`, defined text symbols show type T, no name decoration.
+# BSD nm (Mach-O): `nm -gU`, exported symbols carry a leading underscore (_scdec_open).
 if command -v nm >/dev/null 2>&1; then
-    BAD="$(nm -D "$LIB" 2>/dev/null | awk '$2=="T"{print $3}' | grep -vE '^(scdec_|Java_com_scdataminifier_decoder_ScDecoder_)' || true)"
+    SYMS="$(nm -D "$LIB" 2>/dev/null || nm -gU "$LIB" 2>/dev/null || true)"
+    BAD="$(printf '%s\n' "$SYMS" | awk '$2=="T"||$2=="t"{print $3}' \
+        | sed 's/^_//' | grep -vE '^(scdec_|Java_com_scdataminifier_decoder_ScDecoder_)' || true)"
     if [ -n "$BAD" ]; then
         echo "assert-clean: FAIL — unexpected exported symbol(s) in $LIB:" >&2
         echo "$BAD" >&2

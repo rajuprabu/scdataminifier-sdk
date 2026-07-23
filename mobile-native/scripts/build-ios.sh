@@ -18,50 +18,50 @@ MIN_IOS=15.0
 
 bash "$NATIVE_DIR/scripts/fetch-sources.sh"
 
+# Build one arch slice into $SLICE/libscdec.dylib. Writes only to fixed paths (no stdout return,
+# so noisy build output can never pollute a captured variable).
+build_slice() { # fmt slice-dir sysroot archs
+    local FMT="$1" SLICE="$2" SYSROOT="$3" ARCHS="$4"
+    local ARGS=(
+        -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT="$SYSROOT"
+        -DCMAKE_OSX_ARCHITECTURES="$ARCHS" -DCMAKE_OSX_DEPLOYMENT_TARGET="$MIN_IOS"
+    )
+    bash "$SCRIPT_DIR/build-deps-decoder.sh" "$FMT" "$SLICE/deps-build" "$SLICE/deps" "${ARGS[@]}"
+    # SHARED dylib, JNI off. visibility=hidden (CMakeLists) exports only scdec_*.
+    cmake -S "$MN_DIR" -B "$SLICE/build" \
+        -DCMAKE_BUILD_TYPE=Release -DDEPS_PREFIX="$SLICE/deps" \
+        -DSCDEC_FMT="$FMT" -DSCDEC_JNI=OFF -DSCDEC_STATIC=OFF "${ARGS[@]}"
+    cmake --build "$SLICE/build" -j
+    local DYLIB="$SLICE/build/libscdec.dylib"
+    # Order matches the Linux reference: set id, strip, then scrub LAST so no cctool rewrites
+    # the Mach-O after scrubbing (lipo/xcframework only concatenate/copy).
+    install_name_tool -id "@rpath/libscdec.dylib" "$DYLIB"
+    strip -x "$DYLIB"
+    python3 "$SCRIPT_DIR/scrub.py" "$DYLIB"
+    cp "$DYLIB" "$SLICE/libscdec.dylib"
+}
+
 build_flavour() { # fmt
     local FMT="$1"
-    local FLAV=$([ "$FMT" = 1 ] && echo flavourA || echo flavourB)
+    local FLAV; FLAV=$([ "$FMT" = 1 ] && echo flavourA || echo flavourB)
     local ROOT="$MN_DIR/out/ios/$FLAV"
-    rm -rf "$ROOT"; mkdir -p "$ROOT"
+    rm -rf "$ROOT"; mkdir -p "$ROOT/simulator" "$ROOT/headers"
 
-    build_slice() { # name sysroot archs
-        local NAME="$1" SYSROOT="$2" ARCHS="$3"
-        local SLICE="$ROOT/$NAME"
-        local ARGS=(
-            -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT="$SYSROOT"
-            -DCMAKE_OSX_ARCHITECTURES="$ARCHS" -DCMAKE_OSX_DEPLOYMENT_TARGET="$MIN_IOS"
-        )
-        bash "$SCRIPT_DIR/build-deps-decoder.sh" "$FMT" "$SLICE/deps-build" "$SLICE/deps" "${ARGS[@]}"
-        # SHARED dylib, JNI off. visibility=hidden (set in CMakeLists) exports only scdec_*.
-        cmake -S "$MN_DIR" -B "$SLICE/build" \
-            -DCMAKE_BUILD_TYPE=Release -DDEPS_PREFIX="$SLICE/deps" \
-            -DSCDEC_FMT="$FMT" -DSCDEC_JNI=OFF -DSCDEC_STATIC=OFF \
-            -DCMAKE_MACOSX_BUNDLE=OFF "${ARGS[@]}"
-        cmake --build "$SLICE/build" -j
-        local DYLIB="$SLICE/build/libscdec.dylib"
-        strip -x "$DYLIB" 2>/dev/null || true
-        python3 "$SCRIPT_DIR/scrub.py" "$DYLIB"
-        # install_name so the app can embed it under @rpath
-        install_name_tool -id "@rpath/libscdec.dylib" "$DYLIB" 2>/dev/null || true
-        echo "$DYLIB"
-    }
+    build_slice "$FMT" "$ROOT/device"    iphoneos        arm64
+    build_slice "$FMT" "$ROOT/sim-arm64" iphonesimulator arm64
+    build_slice "$FMT" "$ROOT/sim-x64"   iphonesimulator x86_64
 
-    local DEV SIM_A SIM_X
-    DEV="$(build_slice device    iphoneos        arm64)"
-    SIM_A="$(build_slice sim-arm64 iphonesimulator arm64)"
-    SIM_X="$(build_slice sim-x64   iphonesimulator x86_64)"
+    # One simulator dylib covering both simulator arches.
+    lipo -create "$ROOT/sim-arm64/libscdec.dylib" "$ROOT/sim-x64/libscdec.dylib" \
+        -output "$ROOT/simulator/libscdec.dylib"
 
-    mkdir -p "$ROOT/simulator"
-    lipo -create "$SIM_A" "$SIM_X" -output "$ROOT/simulator/libscdec.dylib"
-    install_name_tool -id "@rpath/libscdec.dylib" "$ROOT/simulator/libscdec.dylib" 2>/dev/null || true
+    cp "$MN_DIR/src/scdec.h" "$ROOT/headers/"
+    bash "$SCRIPT_DIR/assert-clean.sh" "$ROOT/device/libscdec.dylib"
+    bash "$SCRIPT_DIR/assert-clean.sh" "$ROOT/simulator/libscdec.dylib"
 
-    mkdir -p "$ROOT/headers"; cp "$MN_DIR/src/scdec.h" "$ROOT/headers/"
-    for lib in "$DEV" "$ROOT/simulator/libscdec.dylib"; do
-        bash "$SCRIPT_DIR/assert-clean.sh" "$lib" || true   # nm on Mach-O differs; strings check still applies
-    done
     rm -rf "$ROOT/scdec.xcframework"
     xcodebuild -create-xcframework \
-        -library "$DEV" -headers "$ROOT/headers" \
+        -library "$ROOT/device/libscdec.dylib"    -headers "$ROOT/headers" \
         -library "$ROOT/simulator/libscdec.dylib" -headers "$ROOT/headers" \
         -output "$ROOT/scdec.xcframework"
     echo "Built: $ROOT/scdec.xcframework"
@@ -69,4 +69,4 @@ build_flavour() { # fmt
 
 build_flavour 1
 build_flavour 2
-echo "Done. Embed the flavour's out/ios/<flavour>/scdec.xcframework in your app (Embed & Sign)."
+echo "Done. Embed the flavour's out/ios/<flavour>/scdec.xcframework (Embed & Sign)."
