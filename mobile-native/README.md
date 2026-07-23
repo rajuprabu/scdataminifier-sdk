@@ -89,6 +89,24 @@ All share `build-deps-decoder.sh` (per-flavour minimal decode deps), `scrub.py`,
 - `android/ScDecoder.kt` — loads `libscdec`, exposes `license/size/decode → Bitmap`.
 - `ios/ScDecoder.swift` — wraps the C API, `license/size/decode → CGImage`.
 
+## Recompiling / when to rebuild
+
+This module is **independent of the full codec** (`native/` / the jar) — it has its own
+`scdec.c` and JNI, so a change here rebuilds only `libscdec` and touches nothing else. Conversely,
+the full-codec identifier renames (`ImageType.CODEC_A`, `nEncodeA`, …) do **not** apply here: the
+decode-only API is already neutral (`scdec_*` / `ScDecoder`).
+
+- **After changing `scdec.c` / `CMakeLists.txt` / a script:** re-run CI `sdk-decoder-v*` (bump
+  the number), or locally `build-android.sh` / `build-ios.sh`. Always verify on the Linux
+  reference first: `build-linux-test.sh` builds both flavours, scrubs, and asserts clean on a
+  real toolchain (it does not ship — it is the fast correctness check).
+- **The scrub is safety-gated:** every build runs `scrub.py` then `assert-clean.sh`; if a change
+  ever caused a codec token to survive or a non-`scdec_*` symbol to export, the build fails.
+- **A/B mapping (maintainers only; NOT in the shipped binary):** flavour A = the RIFF/VP8 family
+  (WebP), flavour B = the ISO-BMFF/AV1 family (AVIF). Keep this out of any shipped artifact.
+- **License key change:** rebuild both flavours (the key is embedded from
+  `native/src/license_pubkey.h`, shared with the full codec).
+
 ## Value format (input)
 
 The IMAGE value is exactly what the SDK stores in a TLV: `[descriptor byte][data]`.

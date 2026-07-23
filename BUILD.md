@@ -21,6 +21,47 @@ commands for each platform.
 
 ---
 
+## Codec identity is hidden — READ THIS BEFORE REBUILDING
+
+Neither shipped artifact names its image formats. The distributed jar and the decode-only
+mobile libraries were deliberately scrubbed of the words *webp* / *avif* / *aom* and of the
+pinned version numbers. **This constrains how you rebuild** — get it wrong and either the codec
+name reappears in the jar, or the jar fails to bind to the native at runtime.
+
+**The neutral scheme (for maintainers — this mapping is intentionally NOT in the shipped jar):**
+
+| Neutral name (public) | Really is | Where |
+|---|---|---|
+| `ImageType.CODEC_A` | the RIFF/VP8 still-image format (WebP) | `enums/ImageType.java` |
+| `ImageType.CODEC_B` | the ISO-BMFF/AV1 still-image format (AVIF) | same |
+| `nEncodeA` / `nDecodeA` / `nEncodeATarget` | CODEC_A native entry points | `NativeImageCodec.java` ↔ `native/src/scimage_jni.c` |
+| `nEncodeB` / `nDecodeB` | CODEC_B native entry points | same |
+| `codecVersionA` / `codecVersionB` / `codecVersions` | version accessors (runtime strings, not in `.class`) | same |
+| `nVersionsOk` → `scimg_versions_ok()` | native self-check of the pinned versions | `NativeImageCodec.java` ↔ `native/src/scimage_codec.c` |
+
+**The golden rule — the Java native-method name and the JNI export symbol MUST match.**
+Java binds `nEncodeA` to the native symbol `Java_com_scdataminifier_image_NativeImageCodec_nEncodeA`.
+So **any** rename of a codec identifier is a coordinated change across:
+
+1. `src/com/scdataminifier/image/NativeImageCodec.java` — native method declarations,
+2. `native/src/scimage_jni.c` — the matching `Java_..._<name>` export names,
+3. **every platform native** (Linux + macOS + Windows + Android + iOS) — rebuilt so its exported
+   JNI symbols match, because the jar bundles all platforms' natives and a stale one throws
+   `UnsatisfiedLinkError` on that platform at runtime,
+4. `ImageType` constants + **all callers** (in this tree: QRTest `GenerateSecureQr`,
+   TrustraCrypto `SecureCodeSdkAdapter`),
+5. rebuild + re-obfuscate the jar (§1) with all refreshed natives.
+
+**Pinned versions live in the native**, not the jar: `scimg_versions_ok()` compares the runtime
+codecs to the compile-time pins (webp as a packed int, avif via the linked headers' version
+macros). To bump a dependency you therefore edit **both** `native/VERSIONS.env` **and** the pin
+inside `scimg_versions_ok()`, then rebuild every native (see [§8](#8-version-pins--upgrades)).
+
+**Verify a build stayed clean** (§9 has the full commands): the jar's classes must grep to
+**zero** for `webp|avif|1\.6\.0|1\.4\.2`, and each mobile `libscdec` must pass `assert-clean.sh`.
+
+---
+
 ## 0. Prerequisites
 
 | Target | Tools |
@@ -103,6 +144,13 @@ native/scripts/build-windows.ps1       # -> native/out/windows-x64/scimage.dll
 Each script: `fetch-sources.sh` → `build-deps.sh` (builds the three static deps into a prefix) →
 CMake configure/build of `native/CMakeLists.txt` with `-DSCIMG_JNI=ON`.
 `install-to-resources.sh` copies the result into the jar-resource layout for §1.
+
+The compiled `libscimage` exports the **neutral** JNI symbols
+(`Java_..._nEncodeA`/`nDecodeA`/`nEncodeATarget`/`nEncodeB`/`nDecodeB`/`codecVersionA`/
+`codecVersionB`/`codecVersions`/`nVersionsOk`) that the jar's `NativeImageCodec` binds to — the
+raw `.so`/`.dylib`/`.dll` itself still contains the upstream libraries' own symbols/strings, but
+in the jar those natives are split + scrambled (opaque; verified 0 webp/avif in the jar parts).
+If you rename any of these, see the [golden rule](#codec-identity-is-hidden--read-this-before-rebuilding).
 
 > **Why not cross-compile:** the codec verifies byte-identical container rebuilds, so each OS
 > binary must be built on that OS (or its container). See `native/PACKAGING.md`.
@@ -224,9 +272,13 @@ No local toolchain needed; each OS builds on its own runner. Trigger from the **
 | `build-decoder-mobile.yml` | decode-only `scdec`: Android per-ABI `.so`, iOS dynamic `xcframework`, both flavours (scrubbed + asserted) | manual / tag `sdk-decoder-v*` |
 
 ```bash
-# e.g. build the decode-only mobile SDK on CI:
+# e.g. rebuild the decode-only mobile SDK on CI (bump the number each time):
 git tag -a sdk-decoder-v4 -m "decode-only mobile build" && git push origin sdk-decoder-v4
 ```
+
+Tag prefixes and the latest tags used: `sdk-v*` (full-codec natives + jar, latest `sdk-v3`),
+`sdk-mobile-v*` (full-codec mobile, latest `sdk-mobile-v3`), `sdk-decoder-v*` (decode-only
+mobile, latest `sdk-decoder-v3`). Bump the trailing number for a new run.
 
 Download the run's artifacts, drop the native binaries into `resources/native/` (jar) or
 `jniLibs/` / your Xcode project (mobile). **ZKM obfuscation (§1/§2) is not run in CI** (ZKM is
@@ -242,11 +294,15 @@ re-tag before a production build.
 `native/VERSIONS.env` pins libwebp / libavif / aom. To move up:
 
 1. bump the versions there,
-2. re-run `build-deps.sh` + the platform build scripts (or CI),
-3. if libavif's container layout changed, re-capture the AVIF template in
+2. **also** bump the matching pin inside `scimg_versions_ok()` in `native/src/scimage_codec.c`
+   (webp packed int, e.g. `(1<<16)|(6<<8)|0` for 1.6.0; avif is checked via the linked headers'
+   `AVIF_VERSION_*` macros, so it follows automatically) — the pinned numbers live in the native
+   on purpose so they are not string constants in the jar,
+3. re-run `build-deps.sh` + the platform build scripts (or CI) for **every** platform,
+4. if libavif's container layout changed, re-capture the AVIF template in
    `util/ImageContainers.java` **and** the mirrored hex in the mobile ports
    (`mobile-native/src/scdec.c`, iOS/Android `ScImage` ports),
-4. re-run the golden-image / round-trip tests.
+5. re-run the golden-image / round-trip tests, then rebuild + re-obfuscate the jar.
 
 ---
 
@@ -257,8 +313,33 @@ re-tag before a production build.
 javac -cp dist/obf/scdataminifier.jar samples/SdkSmokeTest.java
 java  -cp dist/obf/scdataminifier.jar:samples SdkSmokeTest       # expects "SUCCESS"
 
-# Decode-only artifact is clean (run on any built libscdec.so/.dylib):
+# Jar hides the codec: classes must grep to ZERO for codec names AND version numbers:
+mkdir -p /tmp/jx && (cd /tmp/jx && unzip -oq "$OLDPWD"/dist/obf/scdataminifier.jar)
+grep -rilE 'webp|avif|1\.6\.0|1\.4\.2' /tmp/jx/com | wc -l          # -> 0
+javap -cp /tmp/jx com.scdataminifier.enums.ImageType | grep -E 'CODEC_A|CODEC_B'  # neutral only
+
+# Decode-only mobile artifact is clean (run on any built libscdec.so/.dylib):
 nm -D  libscdec.so | grep ' T '          # only scdec_* / JNI
 strings libscdec.so | grep -ic -e webp -e avif -e aom   # -> 0
 bash mobile-native/scripts/assert-clean.sh libscdec.so  # -> OK
 ```
+
+---
+
+## 10. Recompile checklist — what to rebuild when something changes
+
+| You changed… | Rebuild | Then |
+|---|---|---|
+| **Only Java logic** (no native, no identifier rename) | jar (§1) | `./build-jar.sh` + `./obfuscate.sh` — natives unchanged |
+| **A codec identifier** (ImageType constant, `nEncode*`/`nDecode*`, `codecVersion*`) | **every** platform native (§3+§4) + jar | update Java + `scimage_jni.c` to matching names, rebuild all natives via CI (`sdk-v*` + `sdk-mobile-v*`), collect into `resources/native/`, then jar. See the [golden rule](#codec-identity-is-hidden--read-this-before-rebuilding). |
+| **`scimage_codec.c` / `scimage_jni.c`** (native codec logic) | every platform native (§3+§4) + jar | CI `sdk-v*` (+ `sdk-mobile-v*` if the app embeds the full codec), then jar |
+| **A pinned dependency version** (`VERSIONS.env`) | dep + every native + jar (§8) | also bump `scimg_versions_ok()`; re-run golden-image tests |
+| **The license public key** (`license_pubkey.h`) | every native (full + decode-only) | CI all three workflows; jar; ship the new `.lic` |
+| **`mobile-native/` decode-only code** (`scdec.c`, CMake, scripts) | only `libscdec` (§5) | CI `sdk-decoder-v*`; nothing else — it is independent of the full codec |
+
+**Which platforms must I rebuild?** The jar bundles **all** platforms' natives, so a codec
+identifier or native-logic change means **all** of Linux + macOS + Windows must be rebuilt before
+the jar works everywhere (a stale native → `UnsatisfiedLinkError` on that OS). If you only deploy
+on Linux, rebuilding just the Linux native + jar is enough for that deployment; the other slots
+stay stale until you run CI. Mobile app natives (full-codec §4 or decode-only §5) are separate
+downloads embedded in the app, rebuilt via their own CI workflows.

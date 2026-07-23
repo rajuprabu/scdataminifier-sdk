@@ -80,11 +80,20 @@ from the stock one.
 ## Upgrading versions later
 
 1. Edit `VERSIONS.env`.
-2. `rm -rf third_party out && scripts/fetch-sources.sh && scripts/build-<platform>.sh`.
-3. Update `NativeImageCodec.PINNED_*` constants.
+2. Update the pin inside `scimg_versions_ok()` in `src/scimage_codec.c` (webp packed int;
+   avif follows the linked `AVIF_VERSION_*` macros). The pinned numbers live here — **not** as
+   Java constants — so they never appear as strings in the jar.
+3. `rm -rf third_party out && scripts/fetch-sources.sh && scripts/build-<platform>.sh` for
+   **every** platform (the jar bundles all of them).
 4. Re-capture the AVIF container template if libavif's box layout changed
    (encode a sample, run the strip — a template mismatch throws with details;
-   update `ImageContainers` constants from a hex dump of the new output).
+   update `ImageContainers` constants from a hex dump of the new output, and mirror the same
+   hex in `mobile-native/src/scdec.c` + the `ScImage` mobile ports).
 5. Re-run the golden-image tests before rolling out; ship updated decoders
    to Android/iOS only if you bumped major bitstream features (not needed
    for ordinary version bumps — VP8/AV1 bitstreams are frozen).
+
+> **Renaming the JNI entry points** (the neutral `nEncodeA`/`nDecodeB`/`codecVersionA`/
+> `nVersionsOk` names that hide the codec) is a coordinated change — Java native declarations,
+> `src/scimage_jni.c` export names, **and every platform native** must move together, or the jar
+> throws `UnsatisfiedLinkError` on the stale platform. See `BUILD.md` → "Codec identity is hidden".
