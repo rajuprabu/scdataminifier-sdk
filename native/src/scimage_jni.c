@@ -89,6 +89,31 @@ Java_com_scdataminifier_image_NativeImageCodec_nEncodeWebp(JNIEnv* env, jclass c
 }
 
 JNIEXPORT jbyteArray JNICALL
+Java_com_scdataminifier_image_NativeImageCodec_nEncodeWebpTarget(JNIEnv* env, jclass cls,
+        jbyteArray rgb, jint width, jint height, jint targetBytes) {
+    jbyte* pixels;
+    size_t outSize = 0;
+    uint8_t* out;
+    jbyteArray result = NULL;
+    (void) cls;
+
+    if (rgb == NULL || (*env)->GetArrayLength(env, rgb) < width * height * 3) {
+        throw_ex(env, "RGB buffer too small");
+        return NULL;
+    }
+    pixels = (*env)->GetByteArrayElements(env, rgb, NULL);
+    out = scimg_encode_webp_target((const uint8_t*) pixels, width, height, targetBytes, &outSize);
+    (*env)->ReleaseByteArrayElements(env, rgb, pixels, JNI_ABORT);
+    if (out == NULL) {
+        throw_ex(env, scimg_last_error());
+        return NULL;
+    }
+    result = to_jbytes(env, out, outSize);
+    scimg_free(out);
+    return result;
+}
+
+JNIEXPORT jbyteArray JNICALL
 Java_com_scdataminifier_image_NativeImageCodec_nEncodeAvif(JNIEnv* env, jclass cls,
         jbyteArray rgb, jint width, jint height, jint quality, jint speed) {
     jbyte* pixels;

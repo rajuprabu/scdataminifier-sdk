@@ -144,6 +144,14 @@ public final class ScImageCodec {
         source = JpegExif.normalize(source, JpegExif.readOrientation(sourceImage));
         BufferedImage scaled = scale(source, widthInPixels, heightInPixels);
 
+        // Preferred path: the encoder's own rate-control (WEBP: libwebp target_size +
+        // multi-pass + autofilter). At small budgets this distributes the bits far better
+        // than any fixed-quality encode of the same size — visibly smoother output.
+        ScImage rated = encodeAtTargetSize(scaled, type, includeHeader, targetSizeBytes);
+        if (rated != null) {
+            return rated;
+        }
+
         int lo = 1, hi = 100;
         ScImage best = null;
         while (lo <= hi) {
@@ -176,6 +184,44 @@ public final class ScImageCodec {
         return ScImage.fromImageBytes(type, includeHeader, file);
     }
 
+    /**
+     * Encodes via the encoder's rate-control aimed at the byte budget. Returns null when the
+     * encoder has no rate-control for this type (AVIF, custom encoders) or the bundled native
+     * predates the entry point — the caller then runs the fixed-quality search instead.
+     *
+     * <p>The budget covers the encoded IMAGE value (header byte + data), while the encoder
+     * targets complete file bytes; when stripping, the fixed 20-byte WEBP container shell
+     * comes off again, so the file target is {@code value - 1 + 20}. libwebp's target_size is
+     * a goal, not a cap — on overshoot the target is lowered by the overshoot and re-tried.</p>
+     */
+    private static ScImage encodeAtTargetSize(BufferedImage image, ImageType type,
+                                              boolean includeHeader, int targetSizeBytes) {
+        ImageEncoder enc = encoder;
+        if (enc == null) {
+            throw new ScDataException("Native codec not loaded — call "
+                    + "ScImageCodec.loadBundledObfuscatedNative() (and applyLicense) or "
+                    + "useNativeCodec(path) before compressing");
+        }
+        int fileTarget = targetSizeBytes - 1 + (includeHeader ? 0 : 20);
+        for (int attempt = 0; attempt < 4 && fileTarget >= 64; attempt++) {
+            byte[] file;
+            try {
+                file = enc.encodeTarget(image, type, fileTarget);
+            } catch (LinkageError e) {
+                return null; // bundled native for this platform predates nEncodeWebpTarget
+            }
+            if (file == null) {
+                return null;
+            }
+            ScImage candidate = ScImage.fromImageBytes(type, includeHeader, file);
+            if (candidate.getEncodedSize() <= targetSizeBytes) {
+                return candidate;
+            }
+            fileTarget -= (candidate.getEncodedSize() - targetSizeBytes) + 8;
+        }
+        return null;
+    }
+
     /** Aspect-preserving scale with center-crop ("cover") - never distorts faces. */
     private static BufferedImage scale(BufferedImage src, int width, int height) {
         if (src.getWidth() == width && src.getHeight() == height && src.getType() == BufferedImage.TYPE_INT_RGB) {
@@ -184,12 +230,33 @@ public final class ScImageCodec {
         double factor = Math.max((double) width / src.getWidth(), (double) height / src.getHeight());
         int scaledW = (int) Math.round(src.getWidth() * factor);
         int scaledH = (int) Math.round(src.getHeight() * factor);
-        BufferedImage out = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+
+        // Progressive halving before the final resize: Java's bilinear only samples a 2x2
+        // neighbourhood, so a single pass at a large ratio (e.g. 1280 -> 100 px) point-samples
+        // and aliases badly — the resulting pixel noise then wastes encoder bits and shows up
+        // as blocky artifacts at QR-thumbnail budgets. Halving stays within bilinear's working
+        // range at every step and behaves like a proper area filter.
+        BufferedImage cur = src;
+        while (cur.getWidth() / 2 >= scaledW && cur.getHeight() / 2 >= scaledH) {
+            cur = drawScaled(cur, cur.getWidth() / 2, cur.getHeight() / 2, 0, 0);
+        }
+
+        return drawScaled(cur, width, height, (width - scaledW) / 2, (height - scaledH) / 2,
+                scaledW, scaledH);
+    }
+
+    private static BufferedImage drawScaled(BufferedImage src, int canvasW, int canvasH, int x, int y) {
+        return drawScaled(src, canvasW, canvasH, x, y, canvasW, canvasH);
+    }
+
+    private static BufferedImage drawScaled(BufferedImage src, int canvasW, int canvasH,
+                                            int x, int y, int drawW, int drawH) {
+        BufferedImage out = new BufferedImage(canvasW, canvasH, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = out.createGraphics();
         try {
             g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
             g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-            g.drawImage(src, (width - scaledW) / 2, (height - scaledH) / 2, scaledW, scaledH, null);
+            g.drawImage(src, x, y, drawW, drawH, null);
         } finally {
             g.dispose();
         }

@@ -105,6 +105,77 @@ uint8_t* scimg_encode_webp(const uint8_t* rgb, int width, int height,
     return out;
 }
 
+uint8_t* scimg_encode_webp_target(const uint8_t* rgb, int width, int height,
+                                  int target_bytes, size_t* out_size) {
+    SCIMG_REQUIRE_LICENSE();
+    WebPConfig config;
+    WebPPicture pic;
+    WebPMemoryWriter writer;
+    uint8_t* out = NULL;
+
+    if (!rgb || width < 1 || height < 1 || target_bytes < 1 || !out_size) {
+        set_error("invalid encode arguments");
+        return NULL;
+    }
+    /* Same tuning as the reference PVI vpi() pipeline (plain cwebp defaults + target size):
+       rate-control distributes the byte budget over multiple passes, autofilter picks the
+       deblocking filter strength adaptively, and preprocessing (with the ARGB import path
+       below) smooths low-bitrate artifacts. This is what makes a ~1 KB face thumbnail come
+       out smooth instead of blocky. */
+    if (!WebPConfigInit(&config)) {
+        set_error("WebPConfigInit failed");
+        return NULL;
+    }
+    config.method = 6;               /* slowest - max quality */
+    config.target_size = target_bytes;
+    config.autofilter = 1;
+    config.pass = 7;                 /* rate-control iterations (method + 1) */
+    config.segments = 4;
+    config.partitions = 3;
+    config.thread_level = 1;
+    config.preprocessing = 4;
+    if (!WebPValidateConfig(&config)) {
+        set_error("WebPValidateConfig failed");
+        return NULL;
+    }
+    if (!WebPPictureInit(&pic)) {
+        set_error("WebPPictureInit failed");
+        return NULL;
+    }
+    pic.width = width;
+    pic.height = height;
+    /* ARGB import path (cwebp does this whenever preprocessing > 0): keeps the picture in
+       RGB until encode so the RGB->YUV conversion runs with the preprocessing applied. */
+    pic.use_argb = 1;
+    WebPMemoryWriterInit(&writer);
+    pic.writer = WebPMemoryWrite;
+    pic.custom_ptr = &writer;
+
+    if (!WebPPictureImportRGB(&pic, rgb, width * 3)) {
+        set_error("WebPPictureImportRGB failed");
+        WebPPictureFree(&pic);
+        return NULL;
+    }
+    if (!WebPEncode(&config, &pic)) {
+        snprintf(g_error, sizeof(g_error), "WebPEncode failed (error %d)", pic.error_code);
+        WebPPictureFree(&pic);
+        WebPMemoryWriterClear(&writer);
+        return NULL;
+    }
+    WebPPictureFree(&pic);
+
+    out = (uint8_t*) malloc(writer.size);
+    if (!out) {
+        set_error("out of memory");
+        WebPMemoryWriterClear(&writer);
+        return NULL;
+    }
+    memcpy(out, writer.mem, writer.size);
+    *out_size = writer.size;
+    WebPMemoryWriterClear(&writer);
+    return out;
+}
+
 uint8_t* scimg_decode_webp(const uint8_t* data, size_t size,
                            int* out_width, int* out_height) {
     SCIMG_REQUIRE_LICENSE();

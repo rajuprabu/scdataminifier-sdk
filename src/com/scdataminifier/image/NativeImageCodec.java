@@ -96,6 +96,7 @@ public final class NativeImageCodec implements ImageEncoder {
     public static native String codecVersions();
 
     private static native byte[] nEncodeWebp(byte[] rgb, int width, int height, int quality);
+    private static native byte[] nEncodeWebpTarget(byte[] rgb, int width, int height, int targetBytes);
     private static native byte[] nEncodeAvif(byte[] rgb, int width, int height, int quality, int speed);
     private static native byte[] nDecodeWebp(byte[] data, int[] dims);
     private static native byte[] nDecodeAvif(byte[] data, int[] dims);
@@ -135,6 +136,17 @@ public final class NativeImageCodec implements ImageEncoder {
                 : nEncodeAvif(rgb, width, height, quality, AVIF_SPEED);
     }
 
+    /**
+     * Encodes 24-bit RGB pixels to a complete WEBP file using libwebp's own rate-control
+     * (target_size + multi-pass, autofilter, preprocessing) instead of a fixed quality.
+     * Visibly smoother than a fixed-quality encode of the same size at small budgets.
+     * The target is a goal, not a hard cap — the result may land slightly above it.
+     */
+    public static byte[] encodeRgbWebpTarget(byte[] rgb, int width, int height, int targetBytes) {
+        if (!loaded) throw new ScDataException("Native scimage library not loaded");
+        return nEncodeWebpTarget(rgb, width, height, targetBytes);
+    }
+
     /** Decodes a complete image file to 24-bit RGB; dims[0]/dims[1] receive width/height. */
     public static byte[] decodeToRgb(byte[] imageFile, ImageType type, int[] dims) {
         if (!loaded) throw new ScDataException("Native scimage library not loaded");
@@ -147,6 +159,20 @@ public final class NativeImageCodec implements ImageEncoder {
     @Override
     public byte[] encode(BufferedImage image, ImageType type, int quality) {
         int w = image.getWidth(), h = image.getHeight();
+        return encodeRgb(toRgb(image), w, h, type, quality);
+    }
+
+    /** Rate-controlled WEBP encode for ScImageCodec.compress; AVIF falls back (returns null). */
+    @Override
+    public byte[] encodeTarget(BufferedImage image, ImageType type, int targetBytes) {
+        if (type != ImageType.WEBP) {
+            return null; // no target-size rate control for AVIF — caller uses the quality search
+        }
+        return encodeRgbWebpTarget(toRgb(image), image.getWidth(), image.getHeight(), targetBytes);
+    }
+
+    private static byte[] toRgb(BufferedImage image) {
+        int w = image.getWidth(), h = image.getHeight();
         int[] argb = image.getRGB(0, 0, w, h, null, 0, w);
         byte[] rgb = new byte[w * h * 3];
         for (int i = 0, o = 0; i < argb.length; i++) {
@@ -154,7 +180,7 @@ public final class NativeImageCodec implements ImageEncoder {
             rgb[o++] = (byte) (argb[i] >> 8);
             rgb[o++] = (byte) argb[i];
         }
-        return encodeRgb(rgb, w, h, type, quality);
+        return rgb;
     }
 
     /** Decodes an ScImage (reconstructing the container) to a BufferedImage. */

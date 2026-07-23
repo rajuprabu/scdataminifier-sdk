@@ -34,6 +34,20 @@ const char* scimg_last_error(void);
  */
 uint8_t* scimg_encode_webp(const uint8_t* rgb, int width, int height,
                            int quality, size_t* out_size);
+
+/*
+ * Rate-controlled WebP encode: instead of a fixed quality, libwebp's own
+ * rate-control converges on target_bytes over several passes (method 6,
+ * autofilter, segments 4, partitions 3, preprocessing on). Produces visibly
+ * smoother output at small byte budgets than a fixed-quality encode of the
+ * same size, because the bit allocation is optimized per-segment for the
+ * budget instead of uniformly. target_bytes is a goal, not a hard cap - the
+ * result may land slightly above it; the caller re-tries with a smaller
+ * target if the overshoot matters.
+ */
+uint8_t* scimg_encode_webp_target(const uint8_t* rgb, int width, int height,
+                                  int target_bytes, size_t* out_size);
+
 uint8_t* scimg_encode_avif(const uint8_t* rgb, int width, int height,
                            int quality, int speed, size_t* out_size);
 

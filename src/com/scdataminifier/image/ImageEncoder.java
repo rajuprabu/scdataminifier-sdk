@@ -19,4 +19,14 @@ public interface ImageEncoder {
      * @return complete image file bytes including container header
      */
     byte[] encode(BufferedImage image, ImageType type, int quality);
+
+    /**
+     * Optional rate-controlled encode: the encoder's own rate-control aims the complete
+     * file at {@code targetBytes} (a goal, not a hard cap — slight overshoot is allowed;
+     * the caller re-tries smaller). Encoders without rate-control return {@code null} and
+     * the caller falls back to a fixed-quality search via {@link #encode}.
+     */
+    default byte[] encodeTarget(BufferedImage image, ImageType type, int targetBytes) {
+        return null;
+    }
 }
