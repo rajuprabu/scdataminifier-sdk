@@ -5,7 +5,7 @@ import java.awt.image.BufferedImage;
 import com.scdataminifier.enums.ImageType;
 
 /**
- * Encodes a pixel image to a complete WEBP or AVIF file at a given quality.
+ * Encodes a pixel image to a complete CODEC_A or CODEC_B file at a given quality.
  * The default desktop implementation shells out to cwebp/avifenc; on Android
  * implement this with Bitmap.compress and install it via
  * ScImageCodec.setEncoder().

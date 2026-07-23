@@ -38,13 +38,13 @@ static void throw_ex(JNIEnv* env, const char* msg) {
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_scdataminifier_image_NativeImageCodec_webpVersion(JNIEnv* env, jclass cls) {
+Java_com_scdataminifier_image_NativeImageCodec_codecVersionA(JNIEnv* env, jclass cls) {
     (void) cls;
     return (*env)->NewStringUTF(env, scimg_webp_version());
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_scdataminifier_image_NativeImageCodec_avifVersion(JNIEnv* env, jclass cls) {
+Java_com_scdataminifier_image_NativeImageCodec_codecVersionB(JNIEnv* env, jclass cls) {
     (void) cls;
     return (*env)->NewStringUTF(env, scimg_avif_version());
 }
@@ -64,7 +64,7 @@ static jbyteArray to_jbytes(JNIEnv* env, const uint8_t* data, size_t size) {
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_scdataminifier_image_NativeImageCodec_nEncodeWebp(JNIEnv* env, jclass cls,
+Java_com_scdataminifier_image_NativeImageCodec_nEncodeA(JNIEnv* env, jclass cls,
         jbyteArray rgb, jint width, jint height, jint quality) {
     jbyte* pixels;
     size_t outSize = 0;
@@ -89,7 +89,7 @@ Java_com_scdataminifier_image_NativeImageCodec_nEncodeWebp(JNIEnv* env, jclass c
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_scdataminifier_image_NativeImageCodec_nEncodeWebpTarget(JNIEnv* env, jclass cls,
+Java_com_scdataminifier_image_NativeImageCodec_nEncodeATarget(JNIEnv* env, jclass cls,
         jbyteArray rgb, jint width, jint height, jint targetBytes) {
     jbyte* pixels;
     size_t outSize = 0;
@@ -114,7 +114,7 @@ Java_com_scdataminifier_image_NativeImageCodec_nEncodeWebpTarget(JNIEnv* env, jc
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_scdataminifier_image_NativeImageCodec_nEncodeAvif(JNIEnv* env, jclass cls,
+Java_com_scdataminifier_image_NativeImageCodec_nEncodeB(JNIEnv* env, jclass cls,
         jbyteArray rgb, jint width, jint height, jint quality, jint speed) {
     jbyte* pixels;
     size_t outSize = 0;
@@ -169,14 +169,14 @@ static jbyteArray decode_common(JNIEnv* env, jbyteArray data, jintArray dims, in
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_scdataminifier_image_NativeImageCodec_nDecodeWebp(JNIEnv* env, jclass cls,
+Java_com_scdataminifier_image_NativeImageCodec_nDecodeA(JNIEnv* env, jclass cls,
         jbyteArray data, jintArray dims) {
     (void) cls;
     return decode_common(env, data, dims, 1);
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_com_scdataminifier_image_NativeImageCodec_nDecodeAvif(JNIEnv* env, jclass cls,
+Java_com_scdataminifier_image_NativeImageCodec_nDecodeB(JNIEnv* env, jclass cls,
         jbyteArray data, jintArray dims) {
     (void) cls;
     return decode_common(env, data, dims, 0);

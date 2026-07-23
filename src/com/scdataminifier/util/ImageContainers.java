@@ -13,7 +13,7 @@ import com.scdataminifier.ScDataException;
  * VP8 frame header). Rebuild = 12-byte RIFF header + 8-byte "VP8 " chunk
  * header + bitstream. Saves 20 bytes; only simple lossy (VP8) files qualify.
  *
- * AVIF v1: stored data is [width u16][height u16][av1cLen u8][av1C config]
+ * CODEC_B v1: stored data is [width u16][height u16][av1cLen u8][av1C config]
  * followed by the raw AV1 payload. The ~275-byte ISO-BMFF shell
  * (ftyp/meta/mdat) is rebuilt from a template mirroring libavif's output.
  * Saves ~266 bytes per image.
@@ -28,26 +28,26 @@ public final class ImageContainers {
 
     // ==================== WebP v1 ====================
 
-    public static byte[] stripWebpV1(byte[] file) {
+    public static byte[] stripV1A(byte[] file) {
         if (file.length < 21
                 || file[0] != 'R' || file[1] != 'I' || file[2] != 'F' || file[3] != 'F'
                 || file[8] != 'W' || file[9] != 'E' || file[10] != 'B' || file[11] != 'P') {
-            throw new ScDataException("Not a WebP file");
+            throw new ScDataException("Not a type-A container");
         }
         if (!(file[12] == 'V' && file[13] == 'P' && file[14] == '8' && file[15] == ' ')) {
-            throw new ScDataException("Only simple lossy WebP (VP8 chunk) supports v1 stripping; "
+            throw new ScDataException("Only the simple type-A subchunk supports v1 stripping; "
                     + "this file uses " + new String(file, 12, 4) + " - use version 0 or headerPresent=true");
         }
         int chunkLen = (file[16] & 0xFF) | ((file[17] & 0xFF) << 8) | ((file[18] & 0xFF) << 16) | ((file[19] & 0xFF) << 24);
-        if (20 + chunkLen > file.length) throw new ScDataException("Corrupt WebP chunk length");
+        if (20 + chunkLen > file.length) throw new ScDataException("Corrupt type-A chunk length");
         byte[] payload = Arrays.copyOfRange(file, 20, 20 + chunkLen);
-        if (!Arrays.equals(buildWebpV1(payload), file)) {
-            throw new ScDataException("WebP v1 reconstruction mismatch (extra chunks?); use version 0 or headerPresent=true");
+        if (!Arrays.equals(buildV1A(payload), file)) {
+            throw new ScDataException("Type-A v1 reconstruction mismatch (extra chunks?); use version 0 or headerPresent=true");
         }
         return payload;
     }
 
-    public static byte[] buildWebpV1(byte[] payload) {
+    public static byte[] buildV1A(byte[] payload) {
         int pad = payload.length & 1; // RIFF chunks are even-padded
         ByteWriter w = new ByteWriter();
         w.writeByte('R').writeByte('I').writeByte('F').writeByte('F');
@@ -64,7 +64,7 @@ public final class ImageContainers {
         w.writeByte(v).writeByte(v >>> 8).writeByte(v >>> 16).writeByte(v >>> 24);
     }
 
-    // ==================== AVIF v1 ====================
+    // ==================== CODEC_B v1 ====================
 
     // Fixed boxes exactly as produced by libavif's avifenc for a single
     // 8-bit 4:2:0 (AV1 Main profile, brand MA1B) color image with sRGB nclx.
@@ -77,7 +77,7 @@ public final class ImageContainers {
     private static final byte[] IPMA = hex("0000001769706d61000000000000000100010401028304");
 
     /** @return [width u16][height u16][av1cLen u8][av1C payload] + AV1 data */
-    public static byte[] stripAvifV1(byte[] file) {
+    public static byte[] stripV1B(byte[] file) {
         // locate ispe / av1C inside meta>iprp>ipco, and the extent via iloc
         int metaOff = findBox(file, 0, file.length, "meta");
         int metaEnd = metaOff + u32(file, metaOff);
@@ -96,7 +96,7 @@ public final class ImageContainers {
         int ilocOff = findBox(file, metaOff + 12, metaEnd, "iloc");
         int extentOffset = u32(file, ilocOff + 22);
         int extentLength = u32(file, ilocOff + 26);
-        if (extentOffset + extentLength > file.length) throw new ScDataException("Corrupt AVIF iloc extent");
+        if (extentOffset + extentLength > file.length) throw new ScDataException("Corrupt CODEC_B iloc extent");
 
         ByteWriter w = new ByteWriter();
         w.writeShort(width).writeShort(height).writeByte(av1cLen);
@@ -104,14 +104,14 @@ public final class ImageContainers {
         w.writeBytes(Arrays.copyOfRange(file, extentOffset, extentOffset + extentLength));
         byte[] data = w.toBytes();
 
-        if (!Arrays.equals(buildAvifV1(data), file)) {
-            throw new ScDataException("AVIF v1 reconstruction mismatch (non-canonical container); "
+        if (!Arrays.equals(buildV1B(data), file)) {
+            throw new ScDataException("CODEC_B v1 reconstruction mismatch (non-canonical container); "
                     + "use version 0 or headerPresent=true");
         }
         return data;
     }
 
-    public static byte[] buildAvifV1(byte[] data) {
+    public static byte[] buildV1B(byte[] data) {
         ByteReader r = new ByteReader(data);
         int width = r.readShort();
         int height = r.readShort();
@@ -162,7 +162,7 @@ public final class ImageContainers {
             }
             off += size;
         }
-        throw new ScDataException("AVIF box '" + type + "' not found");
+        throw new ScDataException("CODEC_B box '" + type + "' not found");
     }
 
     private static int u32(byte[] b, int off) {

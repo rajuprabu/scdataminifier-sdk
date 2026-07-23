@@ -3,8 +3,8 @@ package com.scdataminifier.enums;
 import com.scdataminifier.ScDataException;
 
 public enum ImageType {
-    WEBP(0),
-    AVIF(1);
+    CODEC_A(0),
+    CODEC_B(1);
 
     private final int code;
 

@@ -13,10 +13,10 @@ import com.scdataminifier.enums.ImageType;
 import com.scdataminifier.model.ScImage;
 
 /**
- * Compresses images to WEBP/AVIF at a target wire size.
+ * Compresses images to CODEC_A/CODEC_B at a target wire size.
  *
  * <pre>
- * ScImage img = ScImageCodec.compress(pngOrJpegBytes, ImageType.WEBP,
+ * ScImage img = ScImageCodec.compress(pngOrJpegBytes, ImageType.CODEC_A,
  *                                     false,      // strip container header
  *                                     96, 96,     // output pixels
  *                                     600);       // max encoded value bytes
@@ -119,7 +119,7 @@ public final class ScImageCodec {
 
     /**
      * @param sourceImage     source image bytes in any ImageIO-readable format (JPEG, PNG, BMP, GIF)
-     * @param type            output format (WEBP or AVIF)
+     * @param type            output format (CODEC_A or CODEC_B)
      * @param includeHeader   true to keep the container header, false to strip it (image version 1)
      * @param widthInPixels   output width
      * @param heightInPixels  output height
@@ -144,7 +144,7 @@ public final class ScImageCodec {
         source = JpegExif.normalize(source, JpegExif.readOrientation(sourceImage));
         BufferedImage scaled = scale(source, widthInPixels, heightInPixels);
 
-        // Preferred path: the encoder's own rate-control (WEBP: libwebp target_size +
+        // Preferred path: the encoder's own rate-control (CODEC_A: libwebp target_size +
         // multi-pass + autofilter). At small budgets this distributes the bits far better
         // than any fixed-quality encode of the same size — visibly smoother output.
         ScImage rated = encodeAtTargetSize(scaled, type, includeHeader, targetSizeBytes);
@@ -186,11 +186,11 @@ public final class ScImageCodec {
 
     /**
      * Encodes via the encoder's rate-control aimed at the byte budget. Returns null when the
-     * encoder has no rate-control for this type (AVIF, custom encoders) or the bundled native
+     * encoder has no rate-control for this type (CODEC_B, custom encoders) or the bundled native
      * predates the entry point — the caller then runs the fixed-quality search instead.
      *
      * <p>The budget covers the encoded IMAGE value (header byte + data), while the encoder
-     * targets complete file bytes; when stripping, the fixed 20-byte WEBP container shell
+     * targets complete file bytes; when stripping, the fixed 20-byte CODEC_A container shell
      * comes off again, so the file target is {@code value - 1 + 20}. libwebp's target_size is
      * a goal, not a cap — on overshoot the target is lowered by the overshoot and re-tried.</p>
      */
@@ -208,7 +208,7 @@ public final class ScImageCodec {
             try {
                 file = enc.encodeTarget(image, type, fileTarget);
             } catch (LinkageError e) {
-                return null; // bundled native for this platform predates nEncodeWebpTarget
+                return null; // bundled native for this platform predates nEncodeATarget
             }
             if (file == null) {
                 return null;

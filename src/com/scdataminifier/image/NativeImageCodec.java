@@ -20,8 +20,8 @@ import com.scdataminifier.model.ScImage;
 public final class NativeImageCodec implements ImageEncoder {
 
     /** Versions this SDK build is pinned to; load() rejects anything else. */
-    public static final String PINNED_WEBP_VERSION = "1.6.0";
-    public static final String PINNED_AVIF_VERSION = "1.4.2";
+    public static final String PINNED_A_VERSION = "1.6.0";
+    public static final String PINNED_B_VERSION = "1.4.2";
 
     /* Was 6. Lowered for better rate-distortion quality (less blocky/smoother output at small
      * QR-thumbnail sizes) — measured improvement via A/B testing (encoded output size differs:
@@ -29,7 +29,7 @@ public final class NativeImageCodec implements ImageEncoder {
      * image is visibly smoother in flat regions). Cost is server-side encode CPU time only,
      * paid once per credential issuance (not a hot path), so the slower/better preset is a
      * clear win here. 0 is slowest/best; this SDK's range is 0-10. */
-    public static final int AVIF_SPEED = 2;
+    public static final int CODEC_B_SPEED = 2;
 
     private static volatile boolean loaded;
 
@@ -79,27 +79,27 @@ public final class NativeImageCodec implements ImageEncoder {
     }
 
     private static void verifyPinnedVersions() {
-        String webp = webpVersion();
-        String avif = avifVersion();
-        if (!PINNED_WEBP_VERSION.equals(webp) || !PINNED_AVIF_VERSION.equals(avif)) {
-            throw new ScDataException("Native codec version mismatch: libwebp=" + webp
-                    + " libavif=" + avif + " (pinned: " + PINNED_WEBP_VERSION + "/" + PINNED_AVIF_VERSION
+        String a = codecVersionA();
+        String b = codecVersionB();
+        if (!PINNED_A_VERSION.equals(a) || !PINNED_B_VERSION.equals(b)) {
+            throw new ScDataException("Native codec version mismatch: a=" + a
+                    + " b=" + b + " (pinned: " + PINNED_A_VERSION + "/" + PINNED_B_VERSION
                     + ", codecs: " + codecVersions() + ")");
         }
     }
 
     // ==================== natives ====================
 
-    public static native String webpVersion();
-    public static native String avifVersion();
+    public static native String codecVersionA();
+    public static native String codecVersionB();
     /** Underlying AV1 codec versions, e.g. "aom [enc/dec]:3.14.1". */
     public static native String codecVersions();
 
-    private static native byte[] nEncodeWebp(byte[] rgb, int width, int height, int quality);
-    private static native byte[] nEncodeWebpTarget(byte[] rgb, int width, int height, int targetBytes);
-    private static native byte[] nEncodeAvif(byte[] rgb, int width, int height, int quality, int speed);
-    private static native byte[] nDecodeWebp(byte[] data, int[] dims);
-    private static native byte[] nDecodeAvif(byte[] data, int[] dims);
+    private static native byte[] nEncodeA(byte[] rgb, int width, int height, int quality);
+    private static native byte[] nEncodeATarget(byte[] rgb, int width, int height, int targetBytes);
+    private static native byte[] nEncodeB(byte[] rgb, int width, int height, int quality, int speed);
+    private static native byte[] nDecodeA(byte[] data, int[] dims);
+    private static native byte[] nDecodeB(byte[] data, int[] dims);
 
     static native int nLicenseInit(byte[] license, String packageName);
     static native boolean nLicenseOk();
@@ -131,26 +131,26 @@ public final class NativeImageCodec implements ImageEncoder {
     /** Encodes 24-bit RGB pixels (3 bytes/pixel, row-major) to a complete image file. */
     public static byte[] encodeRgb(byte[] rgb, int width, int height, ImageType type, int quality) {
         if (!loaded) throw new ScDataException("Native scimage library not loaded");
-        return type == ImageType.WEBP
-                ? nEncodeWebp(rgb, width, height, quality)
-                : nEncodeAvif(rgb, width, height, quality, AVIF_SPEED);
+        return type == ImageType.CODEC_A
+                ? nEncodeA(rgb, width, height, quality)
+                : nEncodeB(rgb, width, height, quality, CODEC_B_SPEED);
     }
 
     /**
-     * Encodes 24-bit RGB pixels to a complete WEBP file using libwebp's own rate-control
+     * Encodes 24-bit RGB pixels to a complete CODEC_A file using libwebp's own rate-control
      * (target_size + multi-pass, autofilter, preprocessing) instead of a fixed quality.
      * Visibly smoother than a fixed-quality encode of the same size at small budgets.
      * The target is a goal, not a hard cap — the result may land slightly above it.
      */
-    public static byte[] encodeRgbWebpTarget(byte[] rgb, int width, int height, int targetBytes) {
+    public static byte[] encodeRgbTargetA(byte[] rgb, int width, int height, int targetBytes) {
         if (!loaded) throw new ScDataException("Native scimage library not loaded");
-        return nEncodeWebpTarget(rgb, width, height, targetBytes);
+        return nEncodeATarget(rgb, width, height, targetBytes);
     }
 
     /** Decodes a complete image file to 24-bit RGB; dims[0]/dims[1] receive width/height. */
     public static byte[] decodeToRgb(byte[] imageFile, ImageType type, int[] dims) {
         if (!loaded) throw new ScDataException("Native scimage library not loaded");
-        return type == ImageType.WEBP ? nDecodeWebp(imageFile, dims) : nDecodeAvif(imageFile, dims);
+        return type == ImageType.CODEC_A ? nDecodeA(imageFile, dims) : nDecodeB(imageFile, dims);
     }
 
     // ==================== desktop helpers ====================
@@ -162,13 +162,13 @@ public final class NativeImageCodec implements ImageEncoder {
         return encodeRgb(toRgb(image), w, h, type, quality);
     }
 
-    /** Rate-controlled WEBP encode for ScImageCodec.compress; AVIF falls back (returns null). */
+    /** Rate-controlled CODEC_A encode for ScImageCodec.compress; CODEC_B falls back (returns null). */
     @Override
     public byte[] encodeTarget(BufferedImage image, ImageType type, int targetBytes) {
-        if (type != ImageType.WEBP) {
-            return null; // no target-size rate control for AVIF — caller uses the quality search
+        if (type != ImageType.CODEC_A) {
+            return null; // no target-size rate control for CODEC_B — caller uses the quality search
         }
-        return encodeRgbWebpTarget(toRgb(image), image.getWidth(), image.getHeight(), targetBytes);
+        return encodeRgbTargetA(toRgb(image), image.getWidth(), image.getHeight(), targetBytes);
     }
 
     private static byte[] toRgb(BufferedImage image) {

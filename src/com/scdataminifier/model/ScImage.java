@@ -10,14 +10,14 @@ import com.scdataminifier.util.ImageContainers;
  * Structured IMAGE value: a one-byte image header followed by the image data.
  *
  * Image header byte (bit 1 = LSB):
- *   bits 1-4: image type (0: WEBP, 1: AVIF)
+ *   bits 1-4: image type (0: CODEC_A, 1: CODEC_B)
  *   bit 5:    0 = container stripped, 1 = container header present
  *   bits 6-8: version - only version 1 is defined (0 and 2-7 are reserved)
  *
  * Version 1 stores no container at all; the shell is rebuilt in code:
  *   WebP: data is the raw VP8 bitstream (dimensions live in the VP8 frame
  *         header); the 20-byte RIFF + "VP8 " chunk wrapper is recomputed.
- *   AVIF: data is [width u16][height u16][av1cLen u8][av1C config] + AV1
+ *   CODEC_B: data is [width u16][height u16][av1cLen u8][av1C config] + AV1
  *         payload; the ~275-byte ISO-BMFF shell is rebuilt from a template.
  *
  * Stripping verifies that the rebuild is byte-identical to the original
@@ -45,7 +45,7 @@ public class ScImage {
     }
 
     /**
-     * Wraps complete WEBP/AVIF file bytes, stripping the whole container
+     * Wraps complete CODEC_A/CODEC_B file bytes, stripping the whole container
      * shell when keepHeader is false (version 1 semantics).
      */
     public static ScImage fromImageBytes(ImageType type, boolean keepHeader, byte[] imageBytes) {
@@ -74,15 +74,15 @@ public class ScImage {
     /** Complete standard image file bytes (container rebuilt if stripped). */
     public byte[] toImageBytes() {
         if (headerPresent) return data;
-        return type == ImageType.WEBP
-                ? ImageContainers.buildWebpV1(data)
-                : ImageContainers.buildAvifV1(data);
+        return type == ImageType.CODEC_A
+                ? ImageContainers.buildV1A(data)
+                : ImageContainers.buildV1B(data);
     }
 
     private static byte[] stripContainer(ImageType type, byte[] imageBytes) {
-        return type == ImageType.WEBP
-                ? ImageContainers.stripWebpV1(imageBytes)
-                : ImageContainers.stripAvifV1(imageBytes);
+        return type == ImageType.CODEC_A
+                ? ImageContainers.stripV1A(imageBytes)
+                : ImageContainers.stripV1B(imageBytes);
     }
 
     public ImageType getType() { return type; }
