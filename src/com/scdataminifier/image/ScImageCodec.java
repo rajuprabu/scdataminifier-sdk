@@ -238,23 +238,26 @@ public final class ScImageCodec {
         // range at every step and behaves like a proper area filter.
         BufferedImage cur = src;
         while (cur.getWidth() / 2 >= scaledW && cur.getHeight() / 2 >= scaledH) {
-            cur = drawScaled(cur, cur.getWidth() / 2, cur.getHeight() / 2, 0, 0);
+            cur = drawScaled(cur, cur.getWidth() / 2, cur.getHeight() / 2, 0, 0,
+                    cur.getWidth() / 2, cur.getHeight() / 2,
+                    RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         }
 
+        // Final step is BICUBIC: once the halvings have brought the image within 2x of the
+        // target, bicubic's wider kernel preserves edge contrast that bilinear softens away —
+        // the same "crisp at thumbnail size" character as GDI+ HighQualityBicubic, which the
+        // reference C# pipeline used. (Bicubic alone at a large ratio would alias — it only
+        // runs after the halvings.)
         return drawScaled(cur, width, height, (width - scaledW) / 2, (height - scaledH) / 2,
-                scaledW, scaledH);
-    }
-
-    private static BufferedImage drawScaled(BufferedImage src, int canvasW, int canvasH, int x, int y) {
-        return drawScaled(src, canvasW, canvasH, x, y, canvasW, canvasH);
+                scaledW, scaledH, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
     }
 
     private static BufferedImage drawScaled(BufferedImage src, int canvasW, int canvasH,
-                                            int x, int y, int drawW, int drawH) {
+                                            int x, int y, int drawW, int drawH, Object interpolation) {
         BufferedImage out = new BufferedImage(canvasW, canvasH, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = out.createGraphics();
         try {
-            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, interpolation);
             g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
             g.drawImage(src, x, y, drawW, drawH, null);
         } finally {
