@@ -86,9 +86,19 @@ if(NOT WIN32)
 endif()
 
 # Export nothing but our own entry points; keep the library self-contained.
+# GNU ld (Linux / Android): hide every symbol coming from the linked static archives.
 if(NOT APPLE AND NOT WIN32)
     target_link_options(scdec PRIVATE -static-libgcc -Wl,--exclude-libs,ALL -Wl,--gc-sections)
     target_compile_options(scdec PRIVATE -ffunction-sections -fdata-sections)
+endif()
+# Apple ld64 has no --exclude-libs: -fvisibility=hidden only hides OUR symbols, not those from
+# the statically-linked decoder (libwebp/libavif export WebPDecode/… by default). Restrict the
+# dylib's export table to exactly the scdec_* entry points via an explicit symbols list, so no
+# codec symbol is exported (and the stripped, unexported names then drop out of the binary too).
+if(APPLE)
+    target_link_options(scdec PRIVATE
+        -Wl,-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/ios-exported-symbols.txt
+        -Wl,-dead_strip)
 endif()
 
 install(TARGETS scdec LIBRARY DESTINATION lib ARCHIVE DESTINATION lib RUNTIME DESTINATION lib)

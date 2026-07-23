@@ -1,0 +1,6 @@
+_scdec_license
+_scdec_licensed
+_scdec_info
+_scdec_open
+_scdec_free
+_scdec_error

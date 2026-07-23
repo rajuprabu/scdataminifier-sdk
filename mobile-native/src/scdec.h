@@ -50,7 +50,7 @@ SCDEC_API int scdec_licensed(void);
 
 /*
  * Read the pixel dimensions of an IMAGE value without decoding the pixels.
- * Returns 0 on success (and fills *out_w/*out_h), negative on error.
+ * Returns 0 on success (and fills out_w and out_h), negative on error.
  */
 SCDEC_API int scdec_info(const uint8_t *value, int value_len, int *out_w, int *out_h);
 
