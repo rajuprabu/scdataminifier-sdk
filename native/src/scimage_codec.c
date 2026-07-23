@@ -41,6 +41,21 @@ const char* scimg_webp_version(void) {
 
 const char* scimg_avif_version(void) { return avifVersion(); }
 
+/*
+ * Self-check that the statically-linked codecs are the versions this build is pinned to.
+ * Kept native so the pinned version numbers never appear as string constants in the Java jar.
+ * Compares runtime versions to the compile-time pins (webp as a packed int; avif via a string
+ * built from the linked headers' version macros — no literal version string is emitted).
+ */
+int scimg_versions_ok(void) {
+    /* libwebp pinned 1.6.0 -> packed 0x010600 (major<<16 | minor<<8 | patch) */
+    if (WebPGetEncoderVersion() != ((1 << 16) | (6 << 8) | 0)) return 0;
+    char expected[32];
+    snprintf(expected, sizeof(expected), "%d.%d.%d",
+             AVIF_VERSION_MAJOR, AVIF_VERSION_MINOR, AVIF_VERSION_PATCH);
+    return strcmp(expected, avifVersion()) == 0 ? 1 : 0;
+}
+
 const char* scimg_codec_versions(void) {
     avifCodecVersions(g_codec_versions);
     return g_codec_versions;

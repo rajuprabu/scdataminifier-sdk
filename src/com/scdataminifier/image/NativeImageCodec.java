@@ -19,9 +19,6 @@ import com.scdataminifier.model.ScImage;
  */
 public final class NativeImageCodec implements ImageEncoder {
 
-    /** Versions this SDK build is pinned to; load() rejects anything else. */
-    public static final String PINNED_A_VERSION = "1.6.0";
-    public static final String PINNED_B_VERSION = "1.4.2";
 
     /* Was 6. Lowered for better rate-distortion quality (less blocky/smoother output at small
      * QR-thumbnail sizes) — measured improvement via A/B testing (encoded output size differs:
@@ -79,12 +76,11 @@ public final class NativeImageCodec implements ImageEncoder {
     }
 
     private static void verifyPinnedVersions() {
-        String a = codecVersionA();
-        String b = codecVersionB();
-        if (!PINNED_A_VERSION.equals(a) || !PINNED_B_VERSION.equals(b)) {
-            throw new ScDataException("Native codec version mismatch: a=" + a
-                    + " b=" + b + " (pinned: " + PINNED_A_VERSION + "/" + PINNED_B_VERSION
-                    + ", codecs: " + codecVersions() + ")");
+        // The pinned-version comparison lives in the native library (nVersionsOk) so the
+        // version numbers are never present as constants in this jar.
+        if (!nVersionsOk()) {
+            throw new ScDataException("Native codec version mismatch (rebuilt against unpinned "
+                    + "dependency versions?)");
         }
     }
 
@@ -100,6 +96,8 @@ public final class NativeImageCodec implements ImageEncoder {
     private static native byte[] nEncodeB(byte[] rgb, int width, int height, int quality, int speed);
     private static native byte[] nDecodeA(byte[] data, int[] dims);
     private static native byte[] nDecodeB(byte[] data, int[] dims);
+
+    static native boolean nVersionsOk();
 
     static native int nLicenseInit(byte[] license, String packageName);
     static native boolean nLicenseOk();

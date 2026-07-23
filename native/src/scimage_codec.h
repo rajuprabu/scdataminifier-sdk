@@ -23,6 +23,8 @@ const char* scimg_webp_version(void);
 const char* scimg_avif_version(void);
 /* Codec details, e.g. "aom [enc/dec]:3.14.1". */
 const char* scimg_codec_versions(void);
+/* 1 if the linked codecs match the versions this build is pinned to, else 0. */
+int scimg_versions_ok(void);
 
 const char* scimg_last_error(void);
 

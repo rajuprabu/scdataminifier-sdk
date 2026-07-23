@@ -55,6 +55,12 @@ Java_com_scdataminifier_image_NativeImageCodec_codecVersions(JNIEnv* env, jclass
     return (*env)->NewStringUTF(env, scimg_codec_versions());
 }
 
+JNIEXPORT jboolean JNICALL
+Java_com_scdataminifier_image_NativeImageCodec_nVersionsOk(JNIEnv* env, jclass cls) {
+    (void) env; (void) cls;
+    return scimg_versions_ok() ? JNI_TRUE : JNI_FALSE;
+}
+
 static jbyteArray to_jbytes(JNIEnv* env, const uint8_t* data, size_t size) {
     jbyteArray arr = (*env)->NewByteArray(env, (jsize) size);
     if (arr != NULL) {
